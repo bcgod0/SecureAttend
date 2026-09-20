@@ -53,6 +53,7 @@ class ScanController(
     private val reviewQueueRepository: ReviewQueueRepository,
     private val userRepository: UserRepository,
     private val courseRepository: CourseRepository,
+    private val courseEnrollmentRepository: CourseEnrollmentRepository,
     private val messagingTemplate: SimpMessagingTemplate
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -112,6 +113,11 @@ class ScanController(
 
         if (session.status == SessionStatus.CLOSED) {
             throw SessionClosedException(sessionId.toString())
+        }
+
+        // Check if student is enrolled in this course
+        if (!courseEnrollmentRepository.existsByIdStudentIdAndIdCourseId(studentId, session.courseId)) {
+            throw NotEnrolledException("You are not enrolled in this course.")
         }
 
         // Check for duplicate attendance

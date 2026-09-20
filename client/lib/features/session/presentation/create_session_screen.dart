@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../auth/providers/auth_provider.dart';
 
 class CreateSessionScreen extends ConsumerStatefulWidget {
   const CreateSessionScreen({super.key});
@@ -36,8 +37,21 @@ class _CreateSessionScreenState extends ConsumerState<CreateSessionScreen> {
       _courseError = null;
     });
     try {
+      final authState = ref.read(authStateProvider);
+      final currentUserId = authState.userId;
+      final isFaculty = authState.role == 'FACULTY';
+
       final data = await ref.read(apiClientProvider).listCourses();
-      final list = List<Map<String, dynamic>>.from(data['content'] ?? []);
+      var list = List<Map<String, dynamic>>.from(data['content'] ?? []);
+
+      // Filter only active courses
+      list = list.where((c) => c['isActive'] != false).toList();
+
+      // If faculty, show courses assigned to this faculty or unassigned
+      if (isFaculty && currentUserId != null) {
+        list = list.where((c) => c['facultyId'] == currentUserId || c['facultyId'] == null).toList();
+      }
+
       setState(() {
         _courses = list;
         if (list.length == 1) {

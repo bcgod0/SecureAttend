@@ -682,7 +682,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
       final status = e.response?.statusCode;
       if (status == 400) return 'Request rejected (400). Complete enrollment first, then try again.';
       if (status == 401) return 'Session expired. Please log in again.';
-      if (status == 403) return 'Access denied.';
+      if (status == 403) return 'Access denied. You are not enrolled in this course.';
       if (status == 404) return 'Session or resource not found.';
       if (status == 409) return 'Already marked present in this session.';
     }
@@ -690,6 +690,9 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
   }
 
   String _friendlyBackendMessage(String raw) {
+    if (raw.contains('NOT_ENROLLED') || raw.toLowerCase().contains('not enrolled')) {
+      return 'You are not enrolled in this course.';
+    }
     if (raw.contains('DEVICE_NOT_REGISTERED') || raw.contains('device') && raw.contains('register')) {
       return 'Device not registered. Go to Enrollment and register this device first.';
     }

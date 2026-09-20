@@ -5,7 +5,7 @@ import java.time.Instant
 import java.util.UUID
 
 enum class UserStatus {
-    PENDING, ACTIVE
+    PENDING, ACTIVE, DEACTIVATED
 }
 
 @Entity
@@ -46,6 +46,9 @@ data class User(
 
     @Column(name = "father_name", nullable = true)
     var fatherName: String? = null,
+
+    @Column(nullable = true)
+    var semester: Int? = null,
 
     @Column(name = "created_at", nullable = false)
     val createdAt: Instant = Instant.now(),

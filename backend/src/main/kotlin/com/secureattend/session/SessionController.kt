@@ -2,12 +2,16 @@ package com.secureattend.session
 
 import com.secureattend.common.entity.Session
 import com.secureattend.common.entity.SessionStatus
+import com.secureattend.common.entity.UserRole
+import com.secureattend.common.exception.ForbiddenException
 import com.secureattend.common.exception.ResourceAlreadyExistsException
 import com.secureattend.common.exception.ResourceNotFoundException
 import com.secureattend.common.exception.SessionClosedException
+import com.secureattend.common.exception.ValidationException
 import com.secureattend.common.repository.CourseRepository
 import com.secureattend.common.repository.ScanRepository
 import com.secureattend.common.repository.SessionRepository
+import com.secureattend.common.repository.UserRepository
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
@@ -71,6 +75,7 @@ class SessionController(
     private val sessionRepository: SessionRepository,
     private val courseRepository: CourseRepository,
     private val scanRepository: ScanRepository,
+    private val userRepository: UserRepository,
     private val qrTokenService: QrTokenService
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -88,6 +93,20 @@ class SessionController(
 
         val course = courseRepository.findById(request.courseId)
             .orElseThrow { ResourceNotFoundException("Course", request.courseId.toString()) }
+
+        if (!course.isActive) {
+            throw ValidationException("courseId", "Cannot start session for an inactive course")
+        }
+
+        // Only assigned faculty (or admin) can create attendance session
+        if (course.facultyId != null && course.facultyId != facultyId) {
+            val user = userRepository.findById(facultyId).orElse(null)
+            if (user?.role != UserRole.ADMIN) {
+                val assignedFaculty = userRepository.findById(course.facultyId!!).orElse(null)
+                val facultyName = assignedFaculty?.fullName ?: "another faculty member"
+                throw ForbiddenException("Only the assigned faculty ($facultyName) can conduct attendance for this course")
+            }
+        }
 
         // Check no active session for this course
         sessionRepository.findByCourseIdAndStatus(request.courseId, SessionStatus.ACTIVE)?.let {

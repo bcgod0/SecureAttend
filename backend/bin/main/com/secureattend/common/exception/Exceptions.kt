@@ -43,6 +43,12 @@ class AccountPendingException : SecureAttendException(
     httpStatus = HttpStatus.FORBIDDEN
 )
 
+class AccountDeactivatedException : SecureAttendException(
+    errorCode = "ACCOUNT_DEACTIVATED",
+    message = "Your account has been deactivated. Please contact the administrator.",
+    httpStatus = HttpStatus.FORBIDDEN
+)
+
 class SessionClosedException(sessionId: String) : SecureAttendException(
     errorCode = "GONE",
     message = "Session $sessionId is closed and no longer accepting scans",
@@ -69,4 +75,20 @@ class ValidationException(
     message = "$field: $reason",
     httpStatus = HttpStatus.BAD_REQUEST,
     details = mapOf("field" to field, "reason" to reason)
+)
+
+class ForbiddenException(
+    message: String = "Access denied"
+) : SecureAttendException(
+    errorCode = "FORBIDDEN",
+    message = message,
+    httpStatus = HttpStatus.FORBIDDEN
+)
+
+class NotEnrolledException(
+    message: String = "You are not enrolled in this course."
+) : SecureAttendException(
+    errorCode = "NOT_ENROLLED",
+    message = message,
+    httpStatus = HttpStatus.FORBIDDEN
 )

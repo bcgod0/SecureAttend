@@ -254,22 +254,101 @@ class ApiClient {
 
   // ---- Admin ----
 
-  Future<Map<String, dynamic>> createCourse({required String code, required String name}) async {
-    final response = await _dio.post('/admin/courses', data: {'code': code, 'name': name});
+  Future<Map<String, dynamic>> createCourse({
+    required String code,
+    required String name,
+    String? branch,
+    int? year,
+    int? semester,
+    String? facultyId,
+    String? academicSession,
+    String? courseType,
+    int? credits,
+    bool isActive = true,
+  }) async {
+    final response = await _dio.post('/admin/courses', data: {
+      'code': code,
+      'name': name,
+      if (branch != null && branch.isNotEmpty) 'branch': branch,
+      if (year != null) 'year': year,
+      if (semester != null) 'semester': semester,
+      if (facultyId != null && facultyId.isNotEmpty) 'facultyId': facultyId,
+      if (academicSession != null && academicSession.isNotEmpty) 'academicSession': academicSession,
+      if (courseType != null && courseType.isNotEmpty) 'courseType': courseType,
+      if (credits != null) 'credits': credits,
+      'isActive': isActive,
+    });
     return response.data;
   }
 
-  Future<Map<String, dynamic>> listCourses({String? search, int page = 0}) async {
-    final params = <String, dynamic>{'page': page, 'size': 20};
-    if (search != null) params['search'] = search;
+  Future<Map<String, dynamic>> updateCourse(
+    String courseId, {
+    String? code,
+    String? name,
+    String? branch,
+    int? year,
+    int? semester,
+    String? facultyId,
+    String? academicSession,
+    String? courseType,
+    int? credits,
+    bool? isActive,
+  }) async {
+    final response = await _dio.put('/admin/courses/$courseId', data: {
+      if (code != null && code.isNotEmpty) 'code': code,
+      if (name != null && name.isNotEmpty) 'name': name,
+      if (branch != null) 'branch': branch,
+      if (year != null) 'year': year,
+      if (semester != null) 'semester': semester,
+      if (facultyId != null) 'facultyId': facultyId,
+      if (academicSession != null) 'academicSession': academicSession,
+      if (courseType != null) 'courseType': courseType,
+      if (credits != null) 'credits': credits,
+      if (isActive != null) 'isActive': isActive,
+    });
+    return response.data;
+  }
+
+  Future<void> deleteCourse(String courseId) async {
+    await _dio.delete('/admin/courses/$courseId');
+  }
+
+  Future<Map<String, dynamic>> listCourses({
+    String? search,
+    String? branch,
+    String? facultyId,
+    int? semester,
+    String? academicSession,
+    bool? isActive,
+    int page = 0,
+    int size = 50,
+  }) async {
+    final params = <String, dynamic>{'page': page, 'size': size};
+    if (search != null && search.isNotEmpty) params['search'] = search;
+    if (branch != null && branch.isNotEmpty) params['branch'] = branch;
+    if (facultyId != null && facultyId.isNotEmpty) params['facultyId'] = facultyId;
+    if (semester != null) params['semester'] = semester;
+    if (academicSession != null && academicSession.isNotEmpty) params['academicSession'] = academicSession;
+    if (isActive != null) params['isActive'] = isActive;
     final response = await _dio.get('/admin/courses', queryParameters: params);
     return response.data;
   }
 
-  Future<Map<String, dynamic>> listUsers({String? role, String? search, int page = 0}) async {
-    final params = <String, dynamic>{'page': page, 'size': 20};
-    if (role != null) params['role'] = role;
-    if (search != null) params['search'] = search;
+  Future<Map<String, dynamic>> listUsers({
+    String? role,
+    String? status,
+    String? branch,
+    int? semester,
+    String? search,
+    int page = 0,
+    int size = 100,
+  }) async {
+    final params = <String, dynamic>{'page': page, 'size': size};
+    if (role != null && role.isNotEmpty) params['role'] = role;
+    if (status != null && status.isNotEmpty) params['status'] = status;
+    if (branch != null && branch.isNotEmpty) params['branch'] = branch;
+    if (semester != null) params['semester'] = semester;
+    if (search != null && search.isNotEmpty) params['search'] = search;
     final response = await _dio.get('/admin/users', queryParameters: params);
     return response.data;
   }
@@ -281,19 +360,83 @@ class ApiClient {
     return response.data;
   }
 
+  Future<List<Map<String, dynamic>>> listCourseStudents(String courseId) async {
+    final response = await _dio.get('/admin/courses/$courseId/students');
+    return List<Map<String, dynamic>>.from(response.data ?? []);
+  }
+
+  Future<void> unenrollStudent(String courseId, String studentId) async {
+    await _dio.delete('/admin/courses/$courseId/enroll/$studentId');
+  }
+
+  Future<Map<String, dynamic>> getBulkEnrollPreview(String courseId) async {
+    final response = await _dio.get('/admin/courses/$courseId/enroll-preview');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> bulkEnrollBranch(String courseId) async {
+    final response = await _dio.post('/admin/courses/$courseId/enroll-branch');
+    return response.data;
+  }
+
   Future<Map<String, dynamic>> createUser({
     required String email,
+    String? username,
     required String password,
     required String fullName,
     required String role,
+    String? branch,
+    String? section,
+    String? rollNo,
+    String? fatherName,
+    int? semester,
   }) async {
     final response = await _dio.post('/admin/users', data: {
       'email': email,
+      if (username != null && username.isNotEmpty) 'username': username,
       'password': password,
       'fullName': fullName,
       'role': role,
+      if (branch != null && branch.isNotEmpty) 'branch': branch,
+      if (section != null && section.isNotEmpty) 'section': section,
+      if (rollNo != null && rollNo.isNotEmpty) 'rollNo': rollNo,
+      if (fatherName != null && fatherName.isNotEmpty) 'fatherName': fatherName,
+      if (semester != null) 'semester': semester,
     });
     return response.data;
+  }
+
+  Future<Map<String, dynamic>> updateUser(
+    String userId, {
+    String? fullName,
+    String? username,
+    String? email,
+    String? branch,
+    String? section,
+    String? rollNo,
+    String? fatherName,
+    int? semester,
+  }) async {
+    final response = await _dio.put('/admin/users/$userId', data: {
+      if (fullName != null) 'fullName': fullName,
+      if (username != null) 'username': username,
+      if (email != null) 'email': email,
+      if (branch != null) 'branch': branch,
+      if (section != null) 'section': section,
+      if (rollNo != null) 'rollNo': rollNo,
+      if (fatherName != null) 'fatherName': fatherName,
+      if (semester != null) 'semester': semester,
+    });
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> setUserStatus(String userId, String status) async {
+    final response = await _dio.patch('/admin/users/$userId/status', data: {'status': status});
+    return response.data;
+  }
+
+  Future<void> deleteUser(String userId) async {
+    await _dio.delete('/admin/users/$userId');
   }
 
   Future<Map<String, dynamic>> listPendingUsers({int page = 0}) async {

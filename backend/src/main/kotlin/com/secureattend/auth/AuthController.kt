@@ -3,6 +3,7 @@ package com.secureattend.auth
 import com.secureattend.common.entity.User
 import com.secureattend.common.entity.UserRole
 import com.secureattend.common.entity.UserStatus
+import com.secureattend.common.exception.AccountDeactivatedException
 import com.secureattend.common.exception.AccountPendingException
 import com.secureattend.common.exception.InvalidCredentialsException
 import com.secureattend.common.exception.ResourceAlreadyExistsException
@@ -164,7 +165,10 @@ class AuthController(
             throw InvalidCredentialsException()
         }
 
-        // Block login for pending accounts
+        // Block login for deactivated or pending accounts
+        if (user.status == UserStatus.DEACTIVATED) {
+            throw AccountDeactivatedException()
+        }
         if (user.status == UserStatus.PENDING) {
             throw AccountPendingException()
         }

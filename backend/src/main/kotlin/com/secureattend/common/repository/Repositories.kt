@@ -17,7 +17,29 @@ interface UserRepository : JpaRepository<User, UUID> {
     fun existsByUsername(username: String): Boolean
     fun findByRole(role: UserRole, pageable: Pageable): Page<User>
     fun findByStatus(status: UserStatus, pageable: Pageable): Page<User>
-    fun findByRoleAndStatus(role: UserRole, status: UserStatus, pageable: Pageable): Page<User>
+    fun findByRole(role: UserRole): List<User>
+    fun findByRoleAndStatus(role: UserRole, status: UserStatus): List<User>
+    fun findByRoleAndStatusAndBranch(role: UserRole, status: UserStatus, branch: String): List<User>
+
+    @Query("""
+        SELECT u FROM User u 
+        WHERE (:role IS NULL OR u.role = :role)
+          AND (:status IS NULL OR u.status = :status)
+          AND (:branch IS NULL OR u.branch = :branch)
+          AND (:semester IS NULL OR u.semester = :semester)
+          AND (:search IS NULL OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :search, '%')) 
+               OR LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%'))
+               OR LOWER(COALESCE(u.username, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+               OR LOWER(COALESCE(u.rollNo, '')) LIKE LOWER(CONCAT('%', :search, '%')))
+    """)
+    fun filterUsers(
+        @Param("role") role: UserRole?,
+        @Param("status") status: UserStatus?,
+        @Param("branch") branch: String?,
+        @Param("semester") semester: Int?,
+        @Param("search") search: String?,
+        pageable: Pageable
+    ): Page<User>
 
     @Query("SELECT u FROM User u WHERE u.role = :role AND (LOWER(u.fullName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%')))")
     fun searchByRoleAndNameOrEmail(@Param("role") role: UserRole, @Param("search") search: String, pageable: Pageable): Page<User>
@@ -27,6 +49,26 @@ interface UserRepository : JpaRepository<User, UUID> {
 interface CourseRepository : JpaRepository<Course, UUID> {
     fun findByCode(code: String): Course?
     fun existsByCode(code: String): Boolean
+    fun findByFacultyIdAndIsActiveTrue(facultyId: UUID): List<Course>
+
+    @Query("""
+        SELECT c FROM Course c 
+        WHERE (:branch IS NULL OR c.branch = :branch)
+          AND (:facultyId IS NULL OR c.facultyId = :facultyId)
+          AND (:semester IS NULL OR c.semester = :semester)
+          AND (:academicSession IS NULL OR c.academicSession = :academicSession)
+          AND (:isActive IS NULL OR c.isActive = :isActive)
+          AND (:search IS NULL OR LOWER(c.code) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%')))
+    """)
+    fun filterCourses(
+        @Param("branch") branch: String?,
+        @Param("facultyId") facultyId: UUID?,
+        @Param("semester") semester: Int?,
+        @Param("academicSession") academicSession: String?,
+        @Param("isActive") isActive: Boolean?,
+        @Param("search") search: String?,
+        pageable: Pageable
+    ): Page<Course>
 
     @Query("SELECT c FROM Course c WHERE LOWER(c.code) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%'))")
     fun search(@Param("search") search: String, pageable: Pageable): Page<Course>
@@ -37,6 +79,7 @@ interface CourseEnrollmentRepository : JpaRepository<CourseEnrollment, CourseEnr
     fun findByIdCourseId(courseId: UUID): List<CourseEnrollment>
     fun findByIdStudentId(studentId: UUID): List<CourseEnrollment>
     fun existsByIdStudentIdAndIdCourseId(studentId: UUID, courseId: UUID): Boolean
+    fun countByIdCourseId(courseId: UUID): Long
 }
 
 @Repository
