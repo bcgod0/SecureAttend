@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -12,7 +11,6 @@ import '../../features/display_mode/presentation/display_mode_screen.dart';
 import '../../features/review/presentation/review_queue_screen.dart';
 import '../../features/admin/presentation/admin_dashboard_screen.dart';
 import '../../features/auth/providers/auth_provider.dart';
-import '../api/api_client.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);

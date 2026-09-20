@@ -136,6 +136,30 @@ class SessionController(
         return session.toResponse(course?.code, course?.name, includeAttendance = true)
     }
 
+    /**
+     * FR-6: Returns the current QR token for a session (REST polling fallback / Display Mode bootstrap).
+     */
+    @GetMapping("/{sessionId}/qr-token")
+    fun getCurrentQrToken(@PathVariable sessionId: UUID): Map<String, Any> {
+        val session = sessionRepository.findById(sessionId)
+            .orElseThrow { ResourceNotFoundException("Session", sessionId.toString()) }
+
+        if (session.status == SessionStatus.CLOSED) {
+            throw SessionClosedException(sessionId.toString())
+        }
+
+        val token = qrTokenService.getCurrentToken(sessionId)
+        if (token.isEmpty()) {
+            throw ResourceNotFoundException("QR token for active session", sessionId.toString())
+        }
+
+        return mapOf(
+            "token" to token,
+            "rotationSeconds" to session.qrRotationSeconds,
+            "expiresAt" to (System.currentTimeMillis() / 1000 + session.qrRotationSeconds + 5)
+        )
+    }
+
     @GetMapping("/{sessionId}")
     fun getSession(@PathVariable sessionId: UUID): SessionResponse {
         val session = sessionRepository.findById(sessionId)

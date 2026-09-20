@@ -38,12 +38,13 @@ class SecurityConfig(
                     .requestMatchers("/ws/**").permitAll()
                     .requestMatchers("/h2-console/**").permitAll()
                     // Role-based access
-                    .requestMatchers("/api/enrollment/**").hasRole("STUDENT")
-                    .requestMatchers("/api/scan/**").hasRole("STUDENT")
-                    .requestMatchers(HttpMethod.POST, "/api/sessions").hasRole("FACULTY")
-                    .requestMatchers(HttpMethod.PATCH, "/api/sessions/*/close").hasRole("FACULTY")
+                    .requestMatchers("/api/enrollment/**").hasAnyRole("STUDENT", "FACULTY", "ADMIN")
+                    .requestMatchers("/api/scan/**").hasAnyRole("STUDENT", "FACULTY", "ADMIN")
+                    .requestMatchers(HttpMethod.POST, "/api/sessions").hasAnyRole("FACULTY", "ADMIN")
+                    .requestMatchers(HttpMethod.PATCH, "/api/sessions/*/close").hasAnyRole("FACULTY", "ADMIN")
                     .requestMatchers("/api/sessions/**").hasAnyRole("FACULTY", "ADMIN")
-                    .requestMatchers("/api/review/**").hasRole("FACULTY")
+                    .requestMatchers("/api/review/**").hasAnyRole("FACULTY", "ADMIN")
+                    .requestMatchers(HttpMethod.GET, "/api/admin/courses", "/api/admin/courses/**").hasAnyRole("FACULTY", "ADMIN")
                     .requestMatchers("/api/admin/**").hasRole("ADMIN")
                     // Everything else requires auth
                     .anyRequest().authenticated()

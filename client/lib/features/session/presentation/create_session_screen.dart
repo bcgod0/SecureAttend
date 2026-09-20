@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 
@@ -19,6 +20,8 @@ class _CreateSessionScreenState extends ConsumerState<CreateSessionScreen> {
   final _radiusController = TextEditingController(text: '100');
   final _rotationController = TextEditingController(text: '10');
   bool _isLoading = false;
+  bool _isLoadingCourses = false;
+  String? _courseError;
   List<Map<String, dynamic>> _courses = [];
 
   @override
@@ -28,13 +31,77 @@ class _CreateSessionScreenState extends ConsumerState<CreateSessionScreen> {
   }
 
   Future<void> _loadCourses() async {
+    setState(() {
+      _isLoadingCourses = true;
+      _courseError = null;
+    });
     try {
-      // Try admin endpoint, fall back gracefully
       final data = await ref.read(apiClientProvider).listCourses();
+      final list = List<Map<String, dynamic>>.from(data['content'] ?? []);
       setState(() {
-        _courses = List<Map<String, dynamic>>.from(data['content'] ?? []);
+        _courses = list;
+        if (list.length == 1) {
+          _selectedCourseId = list.first['id'] as String?;
+        }
       });
-    } catch (_) {}
+    } catch (e) {
+      setState(() {
+        _courseError = e.toString();
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load courses: $e'),
+            backgroundColor: AppTheme.errorColor,
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: _loadCourses,
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingCourses = false);
+      }
+    }
+  }
+
+  Future<void> _useMyLocation() async {
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location permission denied. Enable in device settings.')),
+          );
+        }
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+      _latController.text = pos.latitude.toStringAsFixed(6);
+      _lonController.text = pos.longitude.toStringAsFixed(6);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Location captured!'),
+            backgroundColor: AppTheme.successColor,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not get location: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -94,9 +161,30 @@ class _CreateSessionScreenState extends ConsumerState<CreateSessionScreen> {
                 // Course dropdown
                 DropdownButtonFormField<String>(
                   value: _selectedCourseId,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Course',
-                    prefixIcon: Icon(Icons.book_outlined),
+                    hintText: _isLoadingCourses
+                        ? 'Loading courses...'
+                        : (_courses.isEmpty ? 'No courses available' : 'Select a course'),
+                    prefixIcon: const Icon(Icons.book_outlined),
+                    suffixIcon: _isLoadingCourses
+                        ? const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : IconButton(
+                            icon: const Icon(Icons.refresh),
+                            tooltip: 'Refresh courses',
+                            onPressed: _loadCourses,
+                          ),
+                    helperText: _courses.isEmpty && !_isLoadingCourses
+                        ? (_courseError != null ? 'Error loading courses' : 'No courses found. Create one in Admin dashboard.')
+                        : null,
+                    helperMaxLines: 2,
                   ),
                   items: _courses.map((c) => DropdownMenuItem(
                     value: c['id'] as String,
@@ -111,22 +199,35 @@ class _CreateSessionScreenState extends ConsumerState<CreateSessionScreen> {
                 const SizedBox(height: 8),
 
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Expanded(
                       child: TextFormField(
                         controller: _latController,
                         decoration: const InputDecoration(labelText: 'Latitude'),
-                        keyboardType: TextInputType.number,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
                         validator: (v) => v?.isEmpty == true ? 'Required' : null,
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: TextFormField(
                         controller: _lonController,
                         decoration: const InputDecoration(labelText: 'Longitude'),
-                        keyboardType: TextInputType.number,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
                         validator: (v) => v?.isEmpty == true ? 'Required' : null,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Tooltip(
+                      message: 'Use my location',
+                      child: IconButton.filled(
+                        icon: const Icon(Icons.my_location),
+                        onPressed: _useMyLocation,
+                        style: IconButton.styleFrom(
+                          backgroundColor: AppTheme.primaryColor,
+                          foregroundColor: Colors.white,
+                        ),
                       ),
                     ),
                   ],

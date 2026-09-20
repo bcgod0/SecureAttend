@@ -34,15 +34,21 @@ class QrTokenService(
         Keys.hmacShaKeyFor(props.qr.hmacSecret.toByteArray())
     }
 
-    // Active session rotations: sessionId → (rotation interval seconds, sequence counter)
-    data class RotationState(val rotationSeconds: Int, var sequenceNumber: Long = 0)
+    // Active session rotations: sessionId → (rotation interval seconds, sequence counter, currentToken, tokenGeneratedAt)
+    data class RotationState(
+        val rotationSeconds: Int,
+        var sequenceNumber: Long = 0,
+        var currentToken: String = "",
+        var tokenGeneratedAt: Long = 0
+    )
     private val activeRotations = ConcurrentHashMap<UUID, RotationState>()
 
     // Consumed tokens for replay protection: sessionId → set of (nonce, studentId)
     val consumedTokens = ConcurrentHashMap<UUID, MutableSet<String>>()
 
     fun startRotation(session: Session) {
-        activeRotations[session.id!!] = RotationState(session.qrRotationSeconds)
+        val state = RotationState(session.qrRotationSeconds)
+        activeRotations[session.id!!] = state
         consumedTokens[session.id] = ConcurrentHashMap.newKeySet()
         log.info("QR rotation started for session {} (every {}s)", session.id, session.qrRotationSeconds)
     }
@@ -54,7 +60,7 @@ class QrTokenService(
     }
 
     /**
-     * Generate an HMAC-signed QR token for a specific session.
+     * Generate an HMAC-signed QR token for a specific session and caches it.
      */
     fun generateToken(sessionId: UUID): String {
         val nonce = ByteArray(8).also { random.nextBytes(it) }.joinToString("") { "%02x".format(it) }
@@ -62,13 +68,29 @@ class QrTokenService(
         val rotationState = activeRotations[sessionId] ?: return ""
         val expiresAt = now.plusSeconds(rotationState.rotationSeconds.toLong() + 5) // 5s grace
 
-        return Jwts.builder()
+        val token = Jwts.builder()
             .claim("sid", sessionId.toString())
             .claim("nonce", nonce)
             .issuedAt(Date.from(now))
             .expiration(Date.from(expiresAt))
             .signWith(hmacKey)
             .compact()
+
+        rotationState.currentToken = token
+        rotationState.tokenGeneratedAt = System.currentTimeMillis()
+        return token
+    }
+
+    /**
+     * Return current cached token if still within rotation interval, or generate a fresh one.
+     */
+    fun getCurrentToken(sessionId: UUID): String {
+        val state = activeRotations[sessionId] ?: return ""
+        val now = System.currentTimeMillis()
+        if (state.currentToken.isNotEmpty() && (now - state.tokenGeneratedAt < state.rotationSeconds * 1000L)) {
+            return state.currentToken
+        }
+        return generateToken(sessionId)
     }
 
     /**
@@ -116,14 +138,15 @@ class QrTokenService(
         val now = System.currentTimeMillis()
         activeRotations.forEach { (sessionId, state) ->
             val intervalMs = state.rotationSeconds * 1000L
-            // Generate a new token when enough time has passed
-            if (now / intervalMs != (now - 1000) / intervalMs || state.sequenceNumber == 0L) {
+            // Generate a new token when rotation interval has elapsed or sequenceNumber is 0
+            if (state.tokenGeneratedAt == 0L || (now - state.tokenGeneratedAt >= intervalMs)) {
                 state.sequenceNumber++
                 val token = generateToken(sessionId)
 
                 if (token.isNotEmpty()) {
                     val payload = mapOf(
                         "token" to token,
+                        "rotationSeconds" to state.rotationSeconds,
                         "expiresAt" to (System.currentTimeMillis() / 1000 + state.rotationSeconds + 5),
                         "sequenceNumber" to state.sequenceNumber
                     )

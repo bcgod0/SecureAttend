@@ -192,6 +192,11 @@ class ApiClient {
     return response.data;
   }
 
+  Future<Map<String, dynamic>> getCurrentQrToken(String sessionId) async {
+    final response = await _dio.get('/sessions/$sessionId/qr-token');
+    return response.data;
+  }
+
   // ---- Scan ----
 
   Future<Map<String, dynamic>> verifyScan({
@@ -210,6 +215,11 @@ class ApiClient {
     });
     final response = await _dio.post('/scan/verify', data: formData);
     return response.data;
+  }
+
+  Future<List<Map<String, dynamic>>> getMyAttendanceHistory() async {
+    final response = await _dio.get('/scan/my-history');
+    return List<Map<String, dynamic>>.from(response.data ?? []);
   }
 
   // ---- Review ----

@@ -72,7 +72,7 @@ class GlobalExceptionHandler {
             .body(
                 ErrorResponse(
                     error = "INTERNAL_ERROR",
-                    message = "An unexpected error occurred",
+                    message = "${ex::class.qualifiedName}: ${ex.message}",
                     status = 500,
                     path = request.getDescription(false).removePrefix("uri=")
                 )

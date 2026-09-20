@@ -33,9 +33,11 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
   }
 
   Future<void> _review(String scanId, String decision) async {
+    final messenger = ScaffoldMessenger.of(context);
     try {
       await ref.read(apiClientProvider).reviewScan(scanId, decision: decision);
-      ScaffoldMessenger.of(context).showSnackBar(
+      if (!mounted) return;
+      messenger.showSnackBar(
         SnackBar(
           content: Text('Scan ${decision.toLowerCase()}'),
           backgroundColor: decision == 'APPROVED' ? AppTheme.successColor : AppTheme.errorColor,
@@ -43,7 +45,8 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
       );
       _loadQueue(); // Refresh
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      if (!mounted) return;
+      messenger.showSnackBar(
         SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.errorColor),
       );
     }

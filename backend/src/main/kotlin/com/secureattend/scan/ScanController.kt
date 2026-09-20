@@ -52,12 +52,40 @@ class ScanController(
     private val scanLayerResultRepository: ScanLayerResultRepository,
     private val reviewQueueRepository: ReviewQueueRepository,
     private val userRepository: UserRepository,
+    private val courseRepository: CourseRepository,
     private val messagingTemplate: SimpMessagingTemplate
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
     private fun currentUserId(): UUID =
         UUID.fromString(SecurityContextHolder.getContext().authentication.principal as String)
+
+    @GetMapping("/my-history")
+    fun getMyHistory(): List<Map<String, Any>> {
+        val studentId = currentUserId()
+        val scans = scanRepository.findByStudentId(studentId)
+        return scans.sortedByDescending { it.submittedAt }.map { scan ->
+            val session = sessionRepository.findById(scan.sessionId).orElse(null)
+            val course = session?.let { courseRepository.findById(it.courseId).orElse(null) }
+            val layerResults = scanLayerResultRepository.findByScanId(scan.id!!)
+            mapOf(
+                "scanId" to scan.id!!,
+                "sessionId" to scan.sessionId,
+                "courseCode" to (course?.code ?: "Unknown"),
+                "courseName" to (course?.name ?: "Unknown"),
+                "finalStatus" to scan.finalStatus.name,
+                "submittedAt" to scan.submittedAt,
+                "layerResults" to layerResults.map {
+                    mapOf(
+                        "layer" to it.layerName,
+                        "passed" to it.passed,
+                        "score" to it.score,
+                        "detail" to (it.detail ?: "")
+                    )
+                }
+            )
+        }
+    }
 
     /**
      * FR-8 through FR-13: The core attendance verification endpoint.

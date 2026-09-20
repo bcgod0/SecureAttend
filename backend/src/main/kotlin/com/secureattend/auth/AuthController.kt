@@ -70,8 +70,9 @@ class AuthController(
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     fun register(@Valid @RequestBody request: RegisterRequest): UserResponse {
-        if (userRepository.existsByEmail(request.email)) {
-            throw ResourceAlreadyExistsException("User", request.email)
+        val normalizedEmail = request.email.trim().lowercase()
+        if (userRepository.existsByEmail(normalizedEmail)) {
+            throw ResourceAlreadyExistsException("User", normalizedEmail)
         }
 
         // Admins cannot self-register
@@ -81,9 +82,9 @@ class AuthController(
 
         val user = userRepository.save(
             User(
-                email = request.email,
+                email = normalizedEmail,
                 passwordHash = passwordEncoder.encode(request.password),
-                fullName = request.fullName,
+                fullName = request.fullName.trim(),
                 role = request.role
             )
         )
@@ -94,7 +95,8 @@ class AuthController(
 
     @PostMapping("/login")
     fun login(@Valid @RequestBody request: LoginRequest): LoginResponse {
-        val user = userRepository.findByEmail(request.email)
+        val normalizedEmail = request.email.trim().lowercase()
+        val user = userRepository.findByEmail(normalizedEmail)
             ?: throw InvalidCredentialsException()
 
         if (!passwordEncoder.matches(request.password, user.passwordHash)) {

@@ -18,6 +18,11 @@ class WebSocketConfig : WebSocketMessageBrokerConfigurer {
     }
 
     override fun registerStompEndpoints(registry: StompEndpointRegistry) {
+        // Pure WebSocket endpoint for native / Flutter STOMP clients
+        registry.addEndpoint("/ws")
+            .setAllowedOriginPatterns("*")
+
+        // SockJS fallback endpoint
         registry.addEndpoint("/ws")
             .setAllowedOriginPatterns("*")
             .withSockJS()

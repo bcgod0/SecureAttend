@@ -17,7 +17,7 @@ data class DeviceRegistration(
     @Column(name = "fingerprint_hash", nullable = false, length = 64)
     val fingerprintHash: String,
 
-    @Column(name = "device_info", columnDefinition = "jsonb")
+    @Column(name = "device_info", columnDefinition = "text")
     val deviceInfo: String? = null,
 
     @Column(name = "is_active", nullable = false)
