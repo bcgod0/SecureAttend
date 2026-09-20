@@ -118,17 +118,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       const SizedBox(height: 16),
                     ],
 
-                    // Email field
+                    // Email or Username field
                     TextFormField(
                       controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
                       decoration: const InputDecoration(
-                        hintText: 'Email address',
-                        prefixIcon: Icon(Icons.email_outlined),
+                        hintText: 'Email or Username',
+                        prefixIcon: Icon(Icons.person_outline),
                       ),
                       validator: (value) {
-                        if (value == null || value.isEmpty) return 'Email is required';
-                        if (!value.contains('@')) return 'Enter a valid email';
+                        if (value == null || value.trim().isEmpty) return 'Email or username is required';
                         return null;
                       },
                     ),

@@ -106,21 +106,43 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<bool> register(String email, String password, String fullName, String role) async {
+  Future<bool> register({
+    required String email,
+    required String username,
+    required String password,
+    required String fullName,
+    required String role,
+    String? branch,
+    String? section,
+    String? rollNo,
+    String? fatherName,
+  }) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
       await _apiClient.register(
         email: email,
+        username: username,
         password: password,
         fullName: fullName,
         role: role,
+        branch: branch,
+        section: section,
+        rollNo: rollNo,
+        fatherName: fatherName,
       );
       state = state.copyWith(isLoading: false);
       return true;
     } catch (e) {
+      String errorMsg = 'Registration failed. Email or username may already be registered.';
+      if (e is DioException && e.response?.data != null) {
+        final data = e.response?.data;
+        if (data is Map && data['message'] != null) {
+          errorMsg = data['message'].toString();
+        }
+      }
       state = state.copyWith(
         isLoading: false,
-        error: 'Registration failed. Email may already be registered.',
+        error: errorMsg,
       );
       return false;
     }

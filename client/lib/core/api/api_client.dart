@@ -78,15 +78,25 @@ class ApiClient {
 
   Future<Map<String, dynamic>> register({
     required String email,
+    required String username,
     required String password,
     required String fullName,
     required String role,
+    String? branch,
+    String? section,
+    String? rollNo,
+    String? fatherName,
   }) async {
     final response = await _dio.post('/auth/register', data: {
       'email': email,
+      'username': username,
       'password': password,
       'fullName': fullName,
       'role': role,
+      if (branch != null) 'branch': branch,
+      if (section != null) 'section': section,
+      if (rollNo != null) 'rollNo': rollNo,
+      if (fatherName != null) 'fatherName': fatherName,
     });
     return response.data;
   }

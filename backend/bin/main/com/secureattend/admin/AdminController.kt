@@ -67,9 +67,14 @@ data class CreateUserRequest(
 data class UserListItem(
     val id: UUID,
     val email: String,
+    val username: String? = null,
     val fullName: String,
     val role: UserRole,
     val status: UserStatus,
+    val branch: String? = null,
+    val section: String? = null,
+    val rollNo: String? = null,
+    val fatherName: String? = null,
     val createdAt: Instant,
     val faceEnrolled: Boolean? = null,
     val deviceRegistered: Boolean? = null
@@ -224,9 +229,14 @@ class AdminController(
             UserListItem(
                 id = user.id!!,
                 email = user.email,
+                username = user.username,
                 fullName = user.fullName,
                 role = user.role,
                 status = user.status,
+                branch = user.branch,
+                section = user.section,
+                rollNo = user.rollNo,
+                fatherName = user.fatherName,
                 createdAt = user.createdAt,
                 faceEnrolled = faceEnrolled,
                 deviceRegistered = deviceRegistered
@@ -245,9 +255,14 @@ class AdminController(
         return UserListItem(
             id = user.id!!,
             email = user.email,
+            username = user.username,
             fullName = user.fullName,
             role = user.role,
             status = user.status,
+            branch = user.branch,
+            section = user.section,
+            rollNo = user.rollNo,
+            fatherName = user.fatherName,
             createdAt = user.createdAt,
             faceEnrolled = faceEnrolled,
             deviceRegistered = deviceRegistered
@@ -277,9 +292,14 @@ class AdminController(
         return UserListItem(
             id = user.id!!,
             email = user.email,
+            username = user.username,
             fullName = user.fullName,
             role = user.role,
             status = user.status,
+            branch = user.branch,
+            section = user.section,
+            rollNo = user.rollNo,
+            fatherName = user.fatherName,
             createdAt = user.createdAt,
             faceEnrolled = false,
             deviceRegistered = false
@@ -299,9 +319,14 @@ class AdminController(
         return UserListItem(
             id = updated.id!!,
             email = updated.email,
+            username = updated.username,
             fullName = updated.fullName,
             role = updated.role,
             status = updated.status,
+            branch = updated.branch,
+            section = updated.section,
+            rollNo = updated.rollNo,
+            fatherName = updated.fatherName,
             createdAt = updated.createdAt
         )
     }

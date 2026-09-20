@@ -13,6 +13,8 @@ import java.util.UUID
 interface UserRepository : JpaRepository<User, UUID> {
     fun findByEmail(email: String): User?
     fun existsByEmail(email: String): Boolean
+    fun findByUsername(username: String): User?
+    fun existsByUsername(username: String): Boolean
     fun findByRole(role: UserRole, pageable: Pageable): Page<User>
     fun findByStatus(status: UserStatus, pageable: Pageable): Page<User>
     fun findByRoleAndStatus(role: UserRole, status: UserStatus, pageable: Pageable): Page<User>

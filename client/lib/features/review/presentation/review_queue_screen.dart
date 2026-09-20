@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 
@@ -55,7 +56,14 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Review Queue')),
+      appBar: AppBar(
+        title: const Text('Review Queue'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/faculty/sessions'),
+          tooltip: 'Back',
+        ),
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _items.isEmpty
