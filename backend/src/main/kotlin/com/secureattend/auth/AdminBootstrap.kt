@@ -5,6 +5,7 @@ import com.secureattend.common.entity.CourseEnrollment
 import com.secureattend.common.entity.CourseEnrollmentId
 import com.secureattend.common.entity.User
 import com.secureattend.common.entity.UserRole
+import com.secureattend.common.entity.UserStatus
 import com.secureattend.common.repository.CourseEnrollmentRepository
 import com.secureattend.common.repository.CourseRepository
 import com.secureattend.common.repository.UserRepository
@@ -45,7 +46,8 @@ class AdminBootstrap(
                         email = email,
                         passwordHash = passwordEncoder.encode("Admin@1234"),
                         fullName = if (email.startsWith("rijul")) "Rijul Jain" else "System Admin",
-                        role = UserRole.ADMIN
+                        role = UserRole.ADMIN,
+                        status = UserStatus.ACTIVE
                     )
                 )
                 log.info("Bootstrap admin created: {} ({})", created.email, created.id)
@@ -69,7 +71,8 @@ class AdminBootstrap(
                         email = email,
                         passwordHash = passwordEncoder.encode("Faculty@1234"),
                         fullName = name,
-                        role = UserRole.FACULTY
+                        role = UserRole.FACULTY,
+                        status = UserStatus.ACTIVE
                     )
                 )
                 log.info("Bootstrap faculty created: {} ({})", faculty.email, faculty.id)
@@ -98,7 +101,8 @@ class AdminBootstrap(
                 email = studentEmail,
                 passwordHash = passwordEncoder.encode("Student@1234"),
                 fullName = "Sample Student",
-                role = UserRole.STUDENT
+                role = UserRole.STUDENT,
+                status = UserStatus.ACTIVE
             )
         )
 

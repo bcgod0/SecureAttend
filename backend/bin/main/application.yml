@@ -1,0 +1,73 @@
+spring:
+  application:
+    name: secureattend-backend
+
+  # ----- Database -----
+  datasource:
+    url: ${DB_URL:jdbc:h2:file:./data/secureattend;AUTO_SERVER=TRUE;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH}
+    username: ${DB_USERNAME:sa}
+    password: ${DB_PASSWORD:}
+    driver-class-name: ${DB_DRIVER:org.h2.Driver}
+
+  jpa:
+    hibernate:
+      ddl-auto: ${DDL_AUTO:update}
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    enabled: ${FLYWAY_ENABLED:false}
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  # ----- H2 Console (dev only) -----
+  h2:
+    console:
+      enabled: ${H2_CONSOLE_ENABLED:true}
+      path: /h2-console
+
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 10MB
+
+# ----- Server -----
+server:
+  port: ${SERVER_PORT:8080}
+
+# ----- SecureAttend Custom Properties -----
+secureattend:
+  jwt:
+    secret: ${JWT_SECRET:dev-jwt-secret-change-in-production-min-32-chars!!}
+    access-token-expiry-minutes: ${JWT_ACCESS_EXPIRY:15}
+    refresh-token-expiry-days: ${JWT_REFRESH_EXPIRY:7}
+
+  qr:
+    hmac-secret: ${QR_HMAC_SECRET:dev-qr-hmac-secret-change-in-prod-min-32-chars!!}
+    default-rotation-seconds: ${QR_ROTATION_SECONDS:10}
+
+  ml-service:
+    base-url: ${ML_SERVICE_URL:http://localhost:8000}
+    timeout-seconds: ${ML_SERVICE_TIMEOUT:5}
+
+  geofence:
+    max-radius-meters: ${GEOFENCE_MAX_RADIUS:1000}
+
+  face:
+    similarity-threshold: ${FACE_SIMILARITY_THRESHOLD:0.55}
+
+  anomaly:
+    flag-threshold: ${ANOMALY_FLAG_THRESHOLD:0.7}
+
+  admin:
+    bootstrap-email: ${ADMIN_EMAIL:admin@secureattend.com}
+    bootstrap-password: ${ADMIN_PASSWORD:Admin@1234}
+
+# ----- Logging -----
+logging:
+  level:
+    com.secureattend: DEBUG
+    org.springframework.security: INFO
+    org.flywaydb: INFO

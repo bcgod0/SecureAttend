@@ -2,6 +2,8 @@ package com.secureattend.auth
 
 import com.secureattend.common.entity.User
 import com.secureattend.common.entity.UserRole
+import com.secureattend.common.entity.UserStatus
+import com.secureattend.common.exception.AccountPendingException
 import com.secureattend.common.exception.InvalidCredentialsException
 import com.secureattend.common.exception.ResourceAlreadyExistsException
 import com.secureattend.common.exception.ResourceNotFoundException
@@ -40,6 +42,7 @@ data class UserResponse(
     val email: String,
     val fullName: String,
     val role: UserRole,
+    val status: UserStatus,
     val createdAt: Instant
 )
 
@@ -103,6 +106,11 @@ class AuthController(
             throw InvalidCredentialsException()
         }
 
+        // Block login for pending accounts
+        if (user.status == UserStatus.PENDING) {
+            throw AccountPendingException()
+        }
+
         val accessToken = jwtService.generateAccessToken(user.id!!, user.email, user.role)
         val refreshToken = jwtService.generateRefreshToken(user.id)
 
@@ -141,6 +149,7 @@ class AuthController(
         email = email,
         fullName = fullName,
         role = role,
+        status = status,
         createdAt = createdAt
     )
 }

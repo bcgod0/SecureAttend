@@ -14,6 +14,8 @@ interface UserRepository : JpaRepository<User, UUID> {
     fun findByEmail(email: String): User?
     fun existsByEmail(email: String): Boolean
     fun findByRole(role: UserRole, pageable: Pageable): Page<User>
+    fun findByStatus(status: UserStatus, pageable: Pageable): Page<User>
+    fun findByRoleAndStatus(role: UserRole, status: UserStatus, pageable: Pageable): Page<User>
 
     @Query("SELECT u FROM User u WHERE u.role = :role AND (LOWER(u.fullName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%')))")
     fun searchByRoleAndNameOrEmail(@Param("role") role: UserRole, @Param("search") search: String, pageable: Pageable): Page<User>

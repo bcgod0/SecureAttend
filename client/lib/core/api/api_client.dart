@@ -270,4 +270,34 @@ class ApiClient {
     });
     return response.data;
   }
+
+  Future<Map<String, dynamic>> createUser({
+    required String email,
+    required String password,
+    required String fullName,
+    required String role,
+  }) async {
+    final response = await _dio.post('/admin/users', data: {
+      'email': email,
+      'password': password,
+      'fullName': fullName,
+      'role': role,
+    });
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> listPendingUsers({int page = 0}) async {
+    final params = <String, dynamic>{'page': page, 'size': 50, 'status': 'PENDING'};
+    final response = await _dio.get('/admin/users', queryParameters: params);
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> approveUser(String userId) async {
+    final response = await _dio.patch('/admin/users/$userId/approve');
+    return response.data;
+  }
+
+  Future<void> rejectUser(String userId) async {
+    await _dio.delete('/admin/users/$userId/reject');
+  }
 }

@@ -4,6 +4,10 @@ import jakarta.persistence.*
 import java.time.Instant
 import java.util.UUID
 
+enum class UserStatus {
+    PENDING, ACTIVE
+}
+
 @Entity
 @Table(name = "users")
 data class User(
@@ -23,6 +27,10 @@ data class User(
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     val role: UserRole,
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, columnDefinition = "VARCHAR(20) DEFAULT 'ACTIVE'")
+    var status: UserStatus = UserStatus.PENDING,
 
     @Column(name = "created_at", nullable = false)
     val createdAt: Instant = Instant.now(),

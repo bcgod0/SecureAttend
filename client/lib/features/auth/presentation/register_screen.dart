@@ -40,8 +40,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Registration successful! Please sign in.'),
+          content: Text('Registration submitted! Your account is awaiting admin approval.'),
           backgroundColor: AppTheme.successColor,
+          duration: Duration(seconds: 5),
         ),
       );
       context.go('/login');

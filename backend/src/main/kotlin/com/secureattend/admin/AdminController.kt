@@ -3,7 +3,9 @@ package com.secureattend.admin
 import com.secureattend.common.entity.Course
 import com.secureattend.common.entity.CourseEnrollment
 import com.secureattend.common.entity.CourseEnrollmentId
+import com.secureattend.common.entity.User
 import com.secureattend.common.entity.UserRole
+import com.secureattend.common.entity.UserStatus
 import com.secureattend.common.exception.ResourceAlreadyExistsException
 import com.secureattend.common.exception.ResourceNotFoundException
 import com.secureattend.common.repository.CourseEnrollmentRepository
@@ -12,12 +14,15 @@ import com.secureattend.common.repository.FaceEmbeddingRepository
 import com.secureattend.common.repository.DeviceRegistrationRepository
 import com.secureattend.common.repository.UserRepository
 import jakarta.validation.Valid
+import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Size
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageRequest
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.web.bind.annotation.*
 import java.time.Instant
 import java.util.UUID
@@ -52,11 +57,19 @@ data class EnrollStudentsResponse(
 
 // ---- User DTOs ----
 
+data class CreateUserRequest(
+    @field:Email @field:NotBlank val email: String,
+    @field:NotBlank @field:Size(min = 8) val password: String,
+    @field:NotBlank val fullName: String,
+    val role: UserRole
+)
+
 data class UserListItem(
     val id: UUID,
     val email: String,
     val fullName: String,
     val role: UserRole,
+    val status: UserStatus,
     val createdAt: Instant,
     val faceEnrolled: Boolean? = null,
     val deviceRegistered: Boolean? = null
@@ -71,7 +84,8 @@ class AdminController(
     private val courseEnrollmentRepository: CourseEnrollmentRepository,
     private val userRepository: UserRepository,
     private val faceEmbeddingRepository: FaceEmbeddingRepository,
-    private val deviceRegistrationRepository: DeviceRegistrationRepository
+    private val deviceRegistrationRepository: DeviceRegistrationRepository,
+    private val passwordEncoder: PasswordEncoder
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -189,6 +203,7 @@ class AdminController(
     fun listUsers(
         @RequestParam(required = false) role: UserRole?,
         @RequestParam(required = false) search: String?,
+        @RequestParam(required = false) status: UserStatus?,
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int
     ): Page<UserListItem> {
@@ -196,7 +211,9 @@ class AdminController(
 
         val users = when {
             role != null && !search.isNullOrBlank() -> userRepository.searchByRoleAndNameOrEmail(role, search, pageable)
+            role != null && status != null -> userRepository.findByRoleAndStatus(role, status, pageable)
             role != null -> userRepository.findByRole(role, pageable)
+            status != null -> userRepository.findByStatus(status, pageable)
             else -> userRepository.findAll(pageable)
         }
 
@@ -209,6 +226,7 @@ class AdminController(
                 email = user.email,
                 fullName = user.fullName,
                 role = user.role,
+                status = user.status,
                 createdAt = user.createdAt,
                 faceEnrolled = faceEnrolled,
                 deviceRegistered = deviceRegistered
@@ -229,20 +247,73 @@ class AdminController(
             email = user.email,
             fullName = user.fullName,
             role = user.role,
+            status = user.status,
             createdAt = user.createdAt,
             faceEnrolled = faceEnrolled,
             deviceRegistered = deviceRegistered
         )
     }
 
-    @DeleteMapping("/users/{userId}")
+    @PostMapping("/users")
+    @ResponseStatus(HttpStatus.CREATED)
+    fun createUser(@Valid @RequestBody request: CreateUserRequest): UserListItem {
+        val normalizedEmail = request.email.trim().lowercase()
+        if (userRepository.existsByEmail(normalizedEmail)) {
+            throw ResourceAlreadyExistsException("User", normalizedEmail)
+        }
+
+        // Admin-created users are immediately ACTIVE
+        val user = userRepository.save(
+            User(
+                email = normalizedEmail,
+                passwordHash = passwordEncoder.encode(request.password),
+                fullName = request.fullName.trim(),
+                role = request.role,
+                status = UserStatus.ACTIVE
+            )
+        )
+
+        log.info("Admin created new user: {} with role {}", user.email, user.role)
+        return UserListItem(
+            id = user.id!!,
+            email = user.email,
+            fullName = user.fullName,
+            role = user.role,
+            status = user.status,
+            createdAt = user.createdAt,
+            faceEnrolled = false,
+            deviceRegistered = false
+        )
+    }
+
+    // ---- User Approval ----
+
+    @PatchMapping("/users/{userId}/approve")
+    fun approveUser(@PathVariable userId: UUID): UserListItem {
+        val user = userRepository.findById(userId)
+            .orElseThrow { ResourceNotFoundException("User", userId.toString()) }
+        val updated = userRepository.save(
+            user.copy(status = UserStatus.ACTIVE, updatedAt = java.time.Instant.now())
+        )
+        log.info("Admin approved user: {} ({})", updated.email, updated.id)
+        return UserListItem(
+            id = updated.id!!,
+            email = updated.email,
+            fullName = updated.fullName,
+            role = updated.role,
+            status = updated.status,
+            createdAt = updated.createdAt
+        )
+    }
+
+    @DeleteMapping("/users/{userId}/reject")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    fun deleteUser(@PathVariable userId: UUID) {
+    fun rejectUser(@PathVariable userId: UUID) {
         if (!userRepository.existsById(userId)) {
             throw ResourceNotFoundException("User", userId.toString())
         }
         userRepository.deleteById(userId)
-        log.info("User deleted: {}", userId)
+        log.info("Admin rejected and deleted user: {}", userId)
     }
 
     private fun Course.toResponse() = CourseResponse(

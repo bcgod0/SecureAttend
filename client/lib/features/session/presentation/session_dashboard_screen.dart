@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:stomp_dart_client/stomp_dart_client.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -384,11 +386,87 @@ class _AttendanceRosterModalState extends ConsumerState<_AttendanceRosterModal> 
   bool _isLoading = true;
   String _filter = 'ALL';
   String _searchQuery = '';
+  StompClient? _stompClient;
+  bool _isLive = false;
 
   @override
   void initState() {
     super.initState();
     _loadAttendance();
+    // Connect WebSocket for live feed only on ACTIVE sessions
+    if (widget.session['status'] == 'ACTIVE') {
+      _connectStomp();
+    }
+  }
+
+  @override
+  void dispose() {
+    _stompClient?.deactivate();
+    super.dispose();
+  }
+
+  void _connectStomp() {
+    const storage = FlutterSecureStorage();
+    Future.microtask(() async {
+      final token = await storage.read(key: 'access_token');
+      final sessionId = widget.session['id'] as String;
+      _stompClient = StompClient(
+        config: StompConfig(
+          url: 'ws://localhost:8080/ws',
+          onConnect: (frame) {
+            if (!mounted) return;
+            setState(() => _isLive = true);
+            _stompClient!.subscribe(
+              destination: '/topic/session/$sessionId/attendance',
+              callback: (frame) {
+                if (!mounted || frame.body == null) return;
+                try {
+                  // Parse minimal JSON: {scanId, studentName, finalStatus, submittedAt}
+                  final body = frame.body!;
+                  final nameMatch = RegExp(r'"studentName"\s*:\s*"([^"]+)"').firstMatch(body);
+                  final statusMatch = RegExp(r'"finalStatus"\s*:\s*"([^"]+)"').firstMatch(body);
+                  final timeMatch = RegExp(r'"submittedAt"\s*:\s*"([^"]+)"').firstMatch(body);
+                  final scanIdMatch = RegExp(r'"scanId"\s*:\s*"([^"]+)"').firstMatch(body);
+
+                  if (nameMatch != null && statusMatch != null) {
+                    final newEntry = {
+                      'scanId': scanIdMatch?.group(1) ?? '',
+                      'studentName': nameMatch.group(1)!,
+                      'studentEmail': '',
+                      'studentId': '',
+                      'finalStatus': statusMatch.group(1)!,
+                      'submittedAt': timeMatch?.group(1),
+                      'layerResults': <dynamic>[],
+                    };
+                    setState(() {
+                      // Prepend the new entry so newest is at top
+                      _attendees = [newEntry, ..._attendees];
+                    });
+                  }
+                } catch (_) {}
+              },
+            );
+          },
+          onDisconnect: (_) {
+            if (mounted) setState(() => _isLive = false);
+          },
+          onStompError: (_) {
+            if (mounted) setState(() => _isLive = false);
+          },
+          onWebSocketError: (_) {
+            if (mounted) setState(() => _isLive = false);
+          },
+          connectionTimeout: const Duration(seconds: 5),
+          stompConnectHeaders: {
+            if (token != null) 'Authorization': 'Bearer $token',
+          },
+          webSocketConnectHeaders: {
+            if (token != null) 'Authorization': 'Bearer $token',
+          },
+        ),
+      );
+      _stompClient!.activate();
+    });
   }
 
   Future<void> _loadAttendance() async {
@@ -458,6 +536,7 @@ class _AttendanceRosterModalState extends ConsumerState<_AttendanceRosterModal> 
   Widget build(BuildContext context) {
     final courseCode = widget.session['courseCode'] ?? 'Session';
     final courseName = widget.session['courseName'] ?? '';
+    final isActive = widget.session['status'] == 'ACTIVE';
     final presentCount = _attendees.where((a) => a['finalStatus'] == 'PRESENT').length;
     final flaggedCount = _attendees.where((a) => a['finalStatus'] == 'FLAGGED').length;
     final rejectedCount = _attendees.where((a) => a['finalStatus'] == 'REJECTED').length;
@@ -495,8 +574,52 @@ class _AttendanceRosterModalState extends ConsumerState<_AttendanceRosterModal> 
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('$courseCode — Attendance Roster',
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        Row(
+                          children: [
+                            Text('$courseCode — Attendance Roster',
+                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                            if (isActive) ...[
+                              const SizedBox(width: 10),
+                              AnimatedContainer(
+                                duration: const Duration(milliseconds: 300),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: _isLive
+                                      ? AppTheme.successColor.withValues(alpha: 0.15)
+                                      : Colors.orange.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: _isLive
+                                        ? AppTheme.successColor.withValues(alpha: 0.4)
+                                        : Colors.orange.withValues(alpha: 0.4),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 6,
+                                      height: 6,
+                                      decoration: BoxDecoration(
+                                        color: _isLive ? AppTheme.successColor : Colors.orange,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      _isLive ? 'LIVE' : 'Connecting...',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: _isLive ? AppTheme.successColor : Colors.orange,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                         if (courseName.isNotEmpty)
                           Text(courseName, style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
                       ],

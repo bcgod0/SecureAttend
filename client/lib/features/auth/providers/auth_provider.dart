@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../core/api/api_client.dart';
@@ -89,9 +90,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       return true;
     } catch (e) {
+      // Check if the error is an account-pending 403
+      String errorMessage = 'Login failed. Please check your credentials.';
+      if (e is DioException && e.response?.statusCode == 403) {
+        final errorCode = e.response?.data?['error'] as String?;
+        if (errorCode == 'ACCOUNT_PENDING') {
+          errorMessage = 'Your account is pending admin approval. Please check back later.';
+        }
+      }
       state = state.copyWith(
         isLoading: false,
-        error: 'Login failed. Please check your credentials.',
+        error: errorMessage,
       );
       return false;
     }

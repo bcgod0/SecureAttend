@@ -17,8 +17,10 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
   late TabController _tabController;
   List<Map<String, dynamic>> _courses = [];
   List<Map<String, dynamic>> _users = [];
+  List<Map<String, dynamic>> _pendingUsers = [];
   bool _isLoadingCourses = true;
   bool _isLoadingUsers = true;
+  bool _isLoadingPending = true;
   int _currentTab = 0;
 
   @override
@@ -31,6 +33,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
     });
     _loadCourses();
     _loadUsers();
+    _loadPendingUsers();
   }
 
   @override
@@ -65,9 +68,82 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
     }
   }
 
+  Future<void> _loadPendingUsers() async {
+    setState(() => _isLoadingPending = true);
+    try {
+      final data = await ref.read(apiClientProvider).listPendingUsers();
+      setState(() {
+        _pendingUsers = List<Map<String, dynamic>>.from(data['content'] ?? []);
+        _isLoadingPending = false;
+      });
+    } catch (_) {
+      setState(() => _isLoadingPending = false);
+    }
+  }
+
+  Future<void> _approveUser(Map<String, dynamic> user) async {
+    try {
+      await ref.read(apiClientProvider).approveUser(user['id'] as String);
+      await Future.wait([_loadPendingUsers(), _loadUsers()]);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${user['fullName']} approved successfully!'),
+            backgroundColor: AppTheme.successColor,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.errorColor),
+        );
+      }
+    }
+  }
+
+  Future<void> _rejectUser(Map<String, dynamic> user) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reject Registration'),
+        content: Text(
+          'Reject and delete the account for "${user['fullName']}" (${user['email']})? This cannot be undone.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.errorColor, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Reject & Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ref.read(apiClientProvider).rejectUser(user['id'] as String);
+      await _loadPendingUsers();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${user['fullName']} registration has been rejected.'),
+            backgroundColor: AppTheme.warningColor,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.errorColor),
+        );
+      }
+    }
+  }
+
   // ── Stats ──────────────────────────────────────────────────────────────────
-  int get _studentCount => _users.where((u) => u['role'] == 'STUDENT').length;
-  int get _facultyCount => _users.where((u) => u['role'] == 'FACULTY').length;
+  int get _studentCount => _users.where((u) => u['role'] == 'STUDENT' && u['status'] == 'ACTIVE').length;
+  int get _facultyCount => _users.where((u) => u['role'] == 'FACULTY' && u['status'] == 'ACTIVE').length;
 
   // ── Create Course Dialog ───────────────────────────────────────────────────
   void _showCreateCourseDialog() {
@@ -151,6 +227,154 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
             child: const Text('Create'),
           ),
         ],
+      ),
+    );
+  }
+
+  // ── Create User / Admin Dialog ─────────────────────────────────────────────
+  void _showCreateUserDialog() {
+    final nameController = TextEditingController();
+    final emailController = TextEditingController();
+    final passwordController = TextEditingController();
+    String selectedRole = 'ADMIN';
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.person_add, color: AppTheme.primaryColor, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Text('Add User / Admin'),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Full Name',
+                      hintText: 'e.g. John Doe',
+                      prefixIcon: Icon(Icons.person_outline),
+                    ),
+                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Name is required' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Email Address',
+                      hintText: 'e.g. newadmin@example.com',
+                      prefixIcon: Icon(Icons.email_outlined),
+                    ),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return 'Email is required';
+                      if (!v.contains('@')) return 'Enter a valid email';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: passwordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Password',
+                      hintText: 'Minimum 8 characters',
+                      prefixIcon: Icon(Icons.lock_outline),
+                    ),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return 'Password is required';
+                      if (v.length < 8) return 'At least 8 characters';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Account Role',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade700),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: ['ADMIN', 'FACULTY', 'STUDENT'].map((role) {
+                      final isSelected = selectedRole == role;
+                      final roleColor = switch (role) {
+                        'ADMIN' => AppTheme.warningColor,
+                        'FACULTY' => AppTheme.secondaryColor,
+                        _ => AppTheme.primaryColor,
+                      };
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text(
+                            role,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: isSelected ? Colors.white : roleColor,
+                            ),
+                          ),
+                          selected: isSelected,
+                          selectedColor: roleColor,
+                          onSelected: (_) => setDialogState(() => selectedRole = role),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () async {
+                if (!formKey.currentState!.validate()) return;
+                Navigator.pop(ctx);
+                try {
+                  await ref.read(apiClientProvider).createUser(
+                    email: emailController.text.trim().toLowerCase(),
+                    password: passwordController.text,
+                    fullName: nameController.text.trim(),
+                    role: selectedRole,
+                  );
+                  _loadUsers();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('New $selectedRole created successfully!'),
+                        backgroundColor: AppTheme.successColor,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.errorColor),
+                    );
+                  }
+                }
+              },
+              child: const Text('Create User'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -263,8 +487,31 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
               text: 'Courses (${_courses.length})',
             ),
             Tab(
-              icon: const Icon(Icons.people_outline),
-              text: 'Users (${_users.length})',
+              icon: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  const Icon(Icons.people_outline),
+                  if (_pendingUsers.isNotEmpty)
+                    Positioned(
+                      right: -8,
+                      top: -4,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: const BoxDecoration(
+                          color: AppTheme.warningColor,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          '${_pendingUsers.length}',
+                          style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              text: _pendingUsers.isNotEmpty
+                  ? 'Users (${_pendingUsers.length} pending)'
+                  : 'Users (${_users.length})',
             ),
           ],
         ),
@@ -272,12 +519,12 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
 
       // FAB changes label based on tab
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _currentTab == 0 ? _showCreateCourseDialog : null,
-        backgroundColor: _currentTab == 0 ? AppTheme.primaryColor : Colors.grey,
-        icon: const Icon(Icons.add, color: Colors.white),
+        onPressed: _currentTab == 0 ? _showCreateCourseDialog : _showCreateUserDialog,
+        backgroundColor: _currentTab == 0 ? AppTheme.primaryColor : AppTheme.warningColor,
+        icon: Icon(_currentTab == 0 ? Icons.add : Icons.person_add, color: Colors.white),
         label: Text(
-          _currentTab == 0 ? 'New Course' : 'Users via Register',
-          style: const TextStyle(color: Colors.white),
+          _currentTab == 0 ? 'New Course' : 'New User / Admin',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
 
@@ -308,6 +555,15 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
                   value: '$_facultyCount',
                   color: AppTheme.accentColor,
                 ),
+                if (_pendingUsers.isNotEmpty) ...[
+                  const SizedBox(width: 10),
+                  _StatChip(
+                    icon: Icons.pending_actions,
+                    label: 'Pending',
+                    value: '${_pendingUsers.length}',
+                    color: AppTheme.warningColor,
+                  ),
+                ],
                 const Spacer(),
                 // Admin name
                 Text(
@@ -439,10 +695,19 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
 
   // ── Users Tab ──────────────────────────────────────────────────────────────
   Widget _buildUsersTab() {
-    if (_isLoadingUsers) {
+    if (_isLoadingUsers || _isLoadingPending) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_users.isEmpty) {
+
+    // Only ACTIVE users are shown in role sections
+    final students = _users.where((u) => u['role'] == 'STUDENT' && u['status'] == 'ACTIVE').toList();
+    final faculty = _users.where((u) => u['role'] == 'FACULTY' && u['status'] == 'ACTIVE').toList();
+    final admins = _users.where((u) => u['role'] == 'ADMIN').toList();
+
+    final hasPending = _pendingUsers.isNotEmpty;
+    final hasUsers = students.isNotEmpty || faculty.isNotEmpty || admins.isNotEmpty;
+
+    if (!hasPending && !hasUsers) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -457,11 +722,6 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
       );
     }
 
-    // Group by role
-    final students = _users.where((u) => u['role'] == 'STUDENT').toList();
-    final faculty = _users.where((u) => u['role'] == 'FACULTY').toList();
-    final admins = _users.where((u) => u['role'] == 'ADMIN').toList();
-
     final sections = [
       if (admins.isNotEmpty) ('Admins', admins, AppTheme.warningColor),
       if (faculty.isNotEmpty) ('Faculty', faculty, AppTheme.secondaryColor),
@@ -469,10 +729,58 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
     ];
 
     return RefreshIndicator(
-      onRefresh: _loadUsers,
+      onRefresh: () async => Future.wait([_loadUsers(), _loadPendingUsers()]),
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // ── Pending Approvals Banner ─────────────────────────────────
+          if (hasPending)
+            Container(
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: AppTheme.warningColor.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppTheme.warningColor.withValues(alpha: 0.35), width: 1.5),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.warningColor.withValues(alpha: 0.14),
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.pending_actions, color: AppTheme.warningColor, size: 20),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Pending Approvals (${_pendingUsers.length})',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: AppTheme.warningColor,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          'Review new registrations',
+                          style: TextStyle(fontSize: 11, color: AppTheme.warningColor.withValues(alpha: 0.7)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  ..._pendingUsers.map((user) => _PendingUserTile(
+                    user: user,
+                    onApprove: () => _approveUser(user),
+                    onReject: () => _rejectUser(user),
+                  )),
+                ],
+              ),
+            ),
+
+          // ── Active Users by Role ─────────────────────────────────────
           for (final (sectionTitle, users, color) in sections) ...[
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
@@ -587,6 +895,113 @@ class _UserCard extends StatelessWidget {
             style: TextStyle(color: roleColor, fontSize: 11, fontWeight: FontWeight.w500),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ─── Pending User Tile ────────────────────────────────────────────────────────
+class _PendingUserTile extends StatelessWidget {
+  final Map<String, dynamic> user;
+  final VoidCallback onApprove;
+  final VoidCallback onReject;
+
+  const _PendingUserTile({
+    required this.user,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final name = user['fullName'] as String? ?? '';
+    final email = user['email'] as String? ?? '';
+    final role = (user['role'] as String? ?? '').toLowerCase();
+    final initials = name.trim().isEmpty
+        ? '?'
+        : name.trim().split(' ').map((w) => w[0]).take(2).join().toUpperCase();
+    final roleColor = role == 'faculty' ? AppTheme.secondaryColor : AppTheme.primaryColor;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 22,
+            backgroundColor: AppTheme.warningColor.withValues(alpha: 0.15),
+            child: Text(
+              initials,
+              style: const TextStyle(color: AppTheme.warningColor, fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: roleColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        role,
+                        style: TextStyle(fontSize: 10, color: roleColor, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(email, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Approve button
+          Tooltip(
+            message: 'Approve',
+            child: InkWell(
+              onTap: onApprove,
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.successColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.check_circle_outline, color: AppTheme.successColor, size: 22),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          // Reject button
+          Tooltip(
+            message: 'Reject',
+            child: InkWell(
+              onTap: onReject,
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.errorColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.cancel_outlined, color: AppTheme.errorColor, size: 22),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

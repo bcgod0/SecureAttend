@@ -37,6 +37,12 @@ class InvalidCredentialsException : SecureAttendException(
     httpStatus = HttpStatus.UNAUTHORIZED
 )
 
+class AccountPendingException : SecureAttendException(
+    errorCode = "ACCOUNT_PENDING",
+    message = "Your account is pending admin approval. Please check back later.",
+    httpStatus = HttpStatus.FORBIDDEN
+)
+
 class SessionClosedException(sessionId: String) : SecureAttendException(
     errorCode = "GONE",
     message = "Session $sessionId is closed and no longer accepting scans",
