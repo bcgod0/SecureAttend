@@ -8,31 +8,13 @@ import 'package:dio/dio.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:intl/intl.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/services/device_fingerprint_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../auth/providers/auth_provider.dart';
-import 'dart:js_interop';
-
-// ── JS interop declarations (web only, guarded by kIsWeb at runtime) ─────────
-@JS('_geoStartStream')
-external void _geoStartStreamJS();
-
-@JS('_geoGetLatest')
-external JSString _geoGetLatestJS();
-
-@JS('_geoStopStream')
-external void _geoStopStreamJS();
-
-@JS('_qrStartScan')
-external void _qrStartScanJS(JSString callbackName);
-
-@JS('_qrCancelScan')
-external void _qrCancelScanJS();
-
-@JS('_flutterQrResult')
-external set _flutterQrResultSetter(JSFunction? fn);
+import 'web_interop/web_interop.dart' as web_interop;
 
 class ScanScreen extends ConsumerStatefulWidget {
   const ScanScreen({super.key});
@@ -71,6 +53,9 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
   // Native-only: continuous location stream
   StreamSubscription<Position>? _locationSub;
 
+  // Native QR scanner controller managed in state
+  MobileScannerController? _mobileScannerController;
+
   // Web QR scanner: completer awaited by _buildQrScannerView
   Completer<String>? _webQrCompleter;
   bool _webQrCameraFailed = false;
@@ -86,20 +71,26 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
   void dispose() {
     _locationSub?.cancel();
     _webGeoTimer?.cancel();
+    _disposeScannerController();
     if (kIsWeb) {
-      try { _geoStopStreamJS(); } catch (_) {}
+      try { web_interop.geoStopStream(); } catch (_) {}
     }
     super.dispose();
+  }
+
+  void _disposeScannerController() {
+    _mobileScannerController?.dispose();
+    _mobileScannerController = null;
   }
 
   void _startLocationStream() {
     if (kIsWeb) {
       // Start browser watchPosition immediately for fresh geo on web
-      try { _geoStartStreamJS(); } catch (_) {}
+      try { web_interop.geoStartStream(); } catch (_) {}
       // Poll the cached JS value every 2 seconds into our Flutter state
       _webGeoTimer = Timer.periodic(const Duration(seconds: 2), (_) {
         try {
-          final raw = _geoGetLatestJS().toDart;
+          final raw = web_interop.geoGetLatest();
           final map = jsonDecode(raw) as Map<String, dynamic>;
           if (map['error'] == null) {
             _webLat = (map['lat'] as num).toDouble();
@@ -402,11 +393,12 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
       return _buildWebQrView();
     }
 
-    // Native (Android/iOS) — use mobile_scanner with back camera
-    final controller = MobileScannerController(
+    // Native (Android/iOS) — use controller from state with explicit QR format
+    final controller = _mobileScannerController ??= MobileScannerController(
       detectionSpeed: DetectionSpeed.normal,
       facing: CameraFacing.back,
       torchEnabled: false,
+      formats: const [BarcodeFormat.qrCode],
     );
 
     return Column(
@@ -419,31 +411,213 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
         Expanded(
           child: ClipRRect(
             borderRadius: BorderRadius.circular(20),
-            child: MobileScanner(
-              controller: controller,
-              onDetect: (capture) {
-                final barcodes = capture.barcodes;
-                if (barcodes.isNotEmpty) {
-                  final value = barcodes.first.rawValue;
-                  if (value != null && value.isNotEmpty) {
-                    controller.dispose();
-                    _onQrScanned(value);
-                  }
-                }
-              },
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                MobileScanner(
+                  controller: controller,
+                  errorBuilder: (context, error, child) {
+                    return _buildNativeScannerError(error);
+                  },
+                  onDetect: (capture) {
+                    final barcodes = capture.barcodes;
+                    if (barcodes.isNotEmpty) {
+                      final value = barcodes.first.rawValue;
+                      if (value != null && value.isNotEmpty) {
+                        _onQrScanned(value);
+                      }
+                    }
+                  },
+                ),
+                // Flashlight toggle button overlay
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: ValueListenableBuilder<MobileScannerState>(
+                    valueListenable: controller,
+                    builder: (context, state, child) {
+                      final isTorchOn = state.torchState == TorchState.on;
+                      return IconButton.filled(
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.black54,
+                          foregroundColor: isTorchOn ? Colors.amber : Colors.white,
+                        ),
+                        icon: Icon(isTorchOn ? Icons.flash_on : Icons.flash_off),
+                        onPressed: () => controller.toggleTorch(),
+                        tooltip: 'Toggle Flashlight',
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
           ),
         ),
         const SizedBox(height: 16),
-        OutlinedButton.icon(
-          onPressed: () => setState(() {
-            _phase = _ScanPhase.idle;
-            _errorMessage = null;
-          }),
-          icon: const Icon(Icons.close),
-          label: const Text('Cancel'),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            OutlinedButton.icon(
+              onPressed: _cancelScanning,
+              icon: const Icon(Icons.close),
+              label: const Text('Cancel'),
+            ),
+            const SizedBox(width: 12),
+            TextButton.icon(
+              onPressed: _showManualTokenDialog,
+              icon: const Icon(Icons.keyboard_alt_outlined),
+              label: const Text('Manual Entry'),
+            ),
+          ],
         ),
       ],
+    );
+  }
+
+  Widget _buildNativeScannerError(MobileScannerException error) {
+    final isPermission = error.errorCode == MobileScannerErrorCode.permissionDenied;
+    final isUnsupported = error.errorCode == MobileScannerErrorCode.unsupported;
+
+    String description;
+    if (isPermission) {
+      description = 'Camera permission was denied. Please allow camera access to scan.';
+    } else if (isUnsupported) {
+      description = 'Camera scanning is not supported on this device.';
+    } else {
+      description = error.errorDetails?.message ?? 'Could not initialize camera hardware.';
+    }
+
+    return Container(
+      color: const Color(0xFF1E1E2E),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isPermission ? Icons.no_photography_rounded : Icons.videocam_off_rounded,
+              size: 54,
+              color: Colors.amber,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              isPermission ? 'Camera Permission Required' : 'Camera Unavailable',
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              description,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white70, fontSize: 13),
+            ),
+            const SizedBox(height: 24),
+            if (isPermission)
+              ElevatedButton.icon(
+                onPressed: () async {
+                  await openAppSettings();
+                },
+                icon: const Icon(Icons.settings, size: 18),
+                label: const Text('Open App Settings'),
+              )
+            else
+              ElevatedButton.icon(
+                onPressed: () async {
+                  try {
+                    await _mobileScannerController?.stop();
+                    _mobileScannerController?.dispose();
+                    _mobileScannerController = MobileScannerController(
+                      detectionSpeed: DetectionSpeed.normal,
+                      facing: CameraFacing.back,
+                      torchEnabled: false,
+                      formats: const [BarcodeFormat.qrCode],
+                    );
+                    setState(() {});
+                  } catch (_) {}
+                },
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Retry Camera'),
+              ),
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: _showManualTokenDialog,
+              icon: const Icon(Icons.keyboard, size: 16, color: Colors.white70),
+              label: const Text('Enter Token Manually', style: TextStyle(color: Colors.white70)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showPermissionPermanentlyDeniedDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Camera Permission Required'),
+        content: const Text(
+          'SecureAttend needs camera access to scan attendance QR codes. Please allow camera permission in App Settings.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              openAppSettings();
+            },
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showManualTokenDialog() {
+    final textController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Enter QR Token'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'If the camera is not working or unavailable, paste or type the QR token directly:',
+              style: TextStyle(fontSize: 13, color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: textController,
+              decoration: const InputDecoration(
+                hintText: 'Paste token here...',
+                border: OutlineInputBorder(),
+              ),
+              autofocus: true,
+              maxLines: 2,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final val = textController.text.trim();
+              if (val.isNotEmpty) {
+                Navigator.pop(ctx);
+                _onQrScanned(val);
+              }
+            },
+            child: const Text('Proceed'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -455,17 +629,12 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
         _webQrCompleter = Completer<String>();
         _webQrCameraFailed = false;
 
-        // Register a global JS callback (window._flutterQrResult) that JS calls
-        try {
-          _flutterQrResultSetter = ((JSString result) {
-            if (!(_webQrCompleter?.isCompleted ?? true)) {
-              _webQrCompleter!.complete(result.toDart);
-            }
-          }).toJS;
-          _qrStartScanJS('_flutterQrResult'.toJS);
-        } catch (e) {
-          _webQrCompleter!.complete('__CAMERA_ERROR__');
-        }
+        // Launch Web QR scanner overlay
+        web_interop.qrStartScan((result) {
+          if (!(_webQrCompleter?.isCompleted ?? true)) {
+            _webQrCompleter!.complete(result);
+          }
+        });
 
         _webQrCompleter!.future.then((result) {
           if (!mounted) return;
@@ -505,7 +674,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
           const SizedBox(height: 32),
           OutlinedButton.icon(
             onPressed: () {
-              try { _qrCancelScanJS(); } catch (_) {}
+              try { web_interop.qrCancelScan(); } catch (_) {}
               setState(() { _phase = _ScanPhase.idle; _errorMessage = null; _webQrCompleter = null; });
             },
             icon: const Icon(Icons.close),
@@ -716,15 +885,53 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
   // FLOW LOGIC
   // ─────────────────────────────────────────────
 
-  void _startScanFlow() {
+  Future<void> _startScanFlow() async {
+    if (!kIsWeb) {
+      var status = await Permission.camera.status;
+      if (!status.isGranted) {
+        status = await Permission.camera.request();
+      }
+
+      if (status.isPermanentlyDenied) {
+        if (!mounted) return;
+        _showPermissionPermanentlyDeniedDialog();
+        return;
+      }
+
+      if (!status.isGranted) {
+        if (!mounted) return;
+        setState(() {
+          _errorMessage = 'Camera permission is required to scan QR code.';
+        });
+        return;
+      }
+
+      _mobileScannerController?.dispose();
+      _mobileScannerController = MobileScannerController(
+        detectionSpeed: DetectionSpeed.normal,
+        facing: CameraFacing.back,
+        torchEnabled: false,
+        formats: const [BarcodeFormat.qrCode],
+      );
+    }
+
     setState(() {
       _phase = _ScanPhase.scanning;
       _errorMessage = null;
     });
   }
 
+  void _cancelScanning() {
+    _disposeScannerController();
+    setState(() {
+      _phase = _ScanPhase.idle;
+      _errorMessage = null;
+    });
+  }
+
   void _onQrScanned(String token) {
     _qrToken = token;
+    _disposeScannerController();
     setState(() => _phase = _ScanPhase.capturing);
     _captureSelfieAndLocation();
   }
@@ -772,13 +979,13 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
   Future<Position> _getCurrentLocation() async {
     if (kIsWeb) {
       // First ensure the JS geo stream is running
-      try { _geoStartStreamJS(); } catch (_) {}
+      try { web_interop.geoStartStream(); } catch (_) {}
 
       // Wait up to 10s for a fix if we don't have one yet
       for (int i = 0; i < 20 && _webLat == null; i++) {
         await Future.delayed(const Duration(milliseconds: 500));
         try {
-          final raw = _geoGetLatestJS().toDart;
+          final raw = web_interop.geoGetLatest();
           final map = jsonDecode(raw) as Map<String, dynamic>;
           if (map['error'] == null) {
             _webLat = (map['lat'] as num).toDouble();

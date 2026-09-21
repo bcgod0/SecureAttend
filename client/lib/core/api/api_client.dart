@@ -8,8 +8,10 @@ String get defaultBaseUrl {
   if (envUrl.isNotEmpty) return envUrl;
   if (kIsWeb) {
     final host = Uri.base.host.isNotEmpty ? Uri.base.host : 'localhost';
-    final scheme = Uri.base.scheme.isNotEmpty ? Uri.base.scheme : 'http';
-    return '$scheme://$host:8080/api';
+    if (host == 'localhost' || host == '127.0.0.1') {
+      return 'http://$host:8080/api';
+    }
+    return 'https://thin-off-seen-consultancy.trycloudflare.com/api';
   }
   return 'http://localhost:8080/api';
 }
@@ -19,8 +21,10 @@ String get defaultWsUrl {
   if (envWs.isNotEmpty) return envWs;
   if (kIsWeb) {
     final host = Uri.base.host.isNotEmpty ? Uri.base.host : 'localhost';
-    final wsScheme = Uri.base.scheme == 'https' ? 'wss' : 'ws';
-    return '$wsScheme://$host:8080/ws';
+    if (host == 'localhost' || host == '127.0.0.1') {
+      return 'ws://$host:8080/ws';
+    }
+    return 'wss://thin-off-seen-consultancy.trycloudflare.com/ws';
   }
   return 'ws://localhost:8080/ws';
 }
