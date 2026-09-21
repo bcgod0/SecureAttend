@@ -412,7 +412,7 @@ class _AttendanceRosterModalState extends ConsumerState<_AttendanceRosterModal> 
       final sessionId = widget.session['id'] as String;
       _stompClient = StompClient(
         config: StompConfig(
-          url: 'ws://localhost:8080/ws',
+          url: defaultWsUrl,
           onConnect: (frame) {
             if (!mounted) return;
             setState(() => _isLive = true);

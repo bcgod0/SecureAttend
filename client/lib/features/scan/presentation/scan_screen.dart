@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +13,26 @@ import '../../../core/api/api_client.dart';
 import '../../../core/services/device_fingerprint_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../auth/providers/auth_provider.dart';
+import 'dart:js_interop';
+
+// ── JS interop declarations (web only, guarded by kIsWeb at runtime) ─────────
+@JS('_geoStartStream')
+external void _geoStartStreamJS();
+
+@JS('_geoGetLatest')
+external JSString _geoGetLatestJS();
+
+@JS('_geoStopStream')
+external void _geoStopStreamJS();
+
+@JS('_qrStartScan')
+external void _qrStartScanJS(JSString callbackName);
+
+@JS('_qrCancelScan')
+external void _qrCancelScanJS();
+
+@JS('_flutterQrResult')
+external set _flutterQrResultSetter(JSFunction? fn);
 
 class ScanScreen extends ConsumerStatefulWidget {
   const ScanScreen({super.key});
@@ -41,10 +63,67 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
   List<int>? _faceFrameBytes;
   Position? _position;
 
+  // Web-only: live geo cached from watchPosition
+  double? _webLat;
+  double? _webLng;
+  Timer? _webGeoTimer;
+
+  // Native-only: continuous location stream
+  StreamSubscription<Position>? _locationSub;
+
+  // Web QR scanner: completer awaited by _buildQrScannerView
+  Completer<String>? _webQrCompleter;
+  bool _webQrCameraFailed = false;
+
   @override
   void initState() {
     super.initState();
     _checkEnrollment();
+    _startLocationStream();
+  }
+
+  @override
+  void dispose() {
+    _locationSub?.cancel();
+    _webGeoTimer?.cancel();
+    if (kIsWeb) {
+      try { _geoStopStreamJS(); } catch (_) {}
+    }
+    super.dispose();
+  }
+
+  void _startLocationStream() {
+    if (kIsWeb) {
+      // Start browser watchPosition immediately for fresh geo on web
+      try { _geoStartStreamJS(); } catch (_) {}
+      // Poll the cached JS value every 2 seconds into our Flutter state
+      _webGeoTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+        try {
+          final raw = _geoGetLatestJS().toDart;
+          final map = jsonDecode(raw) as Map<String, dynamic>;
+          if (map['error'] == null) {
+            _webLat = (map['lat'] as num).toDouble();
+            _webLng = (map['lng'] as num).toDouble();
+          }
+        } catch (_) {}
+      });
+    } else {
+      // On native, stream high-accuracy GPS every 2 seconds
+      Geolocator.checkPermission().then((perm) async {
+        if (perm == LocationPermission.denied) {
+          perm = await Geolocator.requestPermission();
+        }
+        if (perm == LocationPermission.deniedForever) return;
+        _locationSub = Geolocator.getPositionStream(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            distanceFilter: 0,
+          ),
+        ).listen((pos) {
+          _position = pos;
+        });
+      });
+    }
   }
 
   Future<void> _checkEnrollment() async {
@@ -319,11 +398,11 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
   // PHASE 2: QR Camera Scanner
   // ─────────────────────────────────────────────
   Widget _buildQrScannerView() {
-    // Web doesn't support mobile_scanner camera; fall back to text input
     if (kIsWeb) {
-      return _buildWebQrInput();
+      return _buildWebQrView();
     }
 
+    // Native (Android/iOS) — use mobile_scanner with back camera
     final controller = MobileScannerController(
       detectionSpeed: DetectionSpeed.normal,
       facing: CameraFacing.back,
@@ -368,14 +447,86 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
     );
   }
 
-  Widget _buildWebQrInput() {
+  /// Web QR view: launches the fullscreen JS camera overlay and waits for result.
+  Widget _buildWebQrView() {
+    // Kick off the JS camera overlay as soon as this widget is built
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_webQrCompleter == null || _webQrCompleter!.isCompleted) {
+        _webQrCompleter = Completer<String>();
+        _webQrCameraFailed = false;
+
+        // Register a global JS callback (window._flutterQrResult) that JS calls
+        try {
+          _flutterQrResultSetter = ((JSString result) {
+            if (!(_webQrCompleter?.isCompleted ?? true)) {
+              _webQrCompleter!.complete(result.toDart);
+            }
+          }).toJS;
+          _qrStartScanJS('_flutterQrResult'.toJS);
+        } catch (e) {
+          _webQrCompleter!.complete('__CAMERA_ERROR__');
+        }
+
+        _webQrCompleter!.future.then((result) {
+          if (!mounted) return;
+          if (result == '__CANCELLED__') {
+            setState(() { _phase = _ScanPhase.idle; _errorMessage = null; });
+          } else if (result == '__CAMERA_ERROR__') {
+            setState(() { _webQrCameraFailed = true; });
+          } else {
+            _onQrScanned(result);
+          }
+        });
+      }
+    });
+
+    // If camera failed, show manual text input fallback
+    if (_webQrCameraFailed) {
+      return _buildWebQrTextFallback();
+    }
+
+    // While JS overlay is active, show a simple waiting screen inside Flutter
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.photo_camera_back, size: 80, color: AppTheme.primaryColor),
+          const SizedBox(height: 24),
+          const Text(
+            'Camera scanner is active',
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Point your back camera at the QR code.\nThe scanner overlay is displayed on screen.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey.shade600),
+          ),
+          const SizedBox(height: 32),
+          OutlinedButton.icon(
+            onPressed: () {
+              try { _qrCancelScanJS(); } catch (_) {}
+              setState(() { _phase = _ScanPhase.idle; _errorMessage = null; _webQrCompleter = null; });
+            },
+            icon: const Icon(Icons.close),
+            label: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebQrTextFallback() {
     final controller = TextEditingController();
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         const Icon(Icons.qr_code, size: 64, color: AppTheme.primaryColor),
         const SizedBox(height: 16),
-        const Text('Paste QR token (web mode)', style: TextStyle(fontWeight: FontWeight.w600)),
+        const Text('Camera unavailable — paste QR token', style: TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        Text('Grant camera permission in browser settings and retry, or paste the token manually.',
+            textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
         const SizedBox(height: 16),
         TextField(
           controller: controller,
@@ -395,7 +546,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
           child: const Text('Continue'),
         ),
         TextButton(
-          onPressed: () => setState(() => _phase = _ScanPhase.idle),
+          onPressed: () => setState(() { _phase = _ScanPhase.idle; _webQrCameraFailed = false; _webQrCompleter = null; }),
           child: const Text('Cancel'),
         ),
       ],
@@ -615,12 +766,54 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
     }
   }
 
+  /// Returns the best available location.
+  /// On web: reads the latest position from the JS watchPosition cache.
+  /// On native: reads the latest position from the geolocator stream.
   Future<Position> _getCurrentLocation() async {
+    if (kIsWeb) {
+      // First ensure the JS geo stream is running
+      try { _geoStartStreamJS(); } catch (_) {}
+
+      // Wait up to 10s for a fix if we don't have one yet
+      for (int i = 0; i < 20 && _webLat == null; i++) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        try {
+          final raw = _geoGetLatestJS().toDart;
+          final map = jsonDecode(raw) as Map<String, dynamic>;
+          if (map['error'] == null) {
+            _webLat = (map['lat'] as num).toDouble();
+            _webLng = (map['lng'] as num).toDouble();
+          }
+        } catch (_) {}
+      }
+
+      if (_webLat == null) {
+        throw Exception('Could not obtain GPS location. Please allow location access in your browser and try again.');
+      }
+
+      // Return a synthetic Position object with the cached web coordinates
+      return Position(
+        latitude: _webLat!,
+        longitude: _webLng!,
+        timestamp: DateTime.now(),
+        accuracy: 20.0,
+        altitude: 0.0,
+        altitudeAccuracy: 0.0,
+        heading: 0.0,
+        headingAccuracy: 0.0,
+        speed: 0.0,
+        speedAccuracy: 0.0,
+      );
+    }
+
+    // Native path: use the continuously streaming position
+    if (_position != null) return _position!;
+
+    // Fallback: one-shot fetch if stream hasn't given us a fix yet
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       throw Exception('Location services are disabled. Please enable GPS.');
     }
-
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
@@ -631,7 +824,6 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
     if (permission == LocationPermission.deniedForever) {
       throw Exception('Location permission permanently denied. Please enable in Settings.');
     }
-
     return await Geolocator.getCurrentPosition(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,

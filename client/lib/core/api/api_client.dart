@@ -1,11 +1,29 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-const String baseUrl = String.fromEnvironment(
-  'API_BASE_URL',
-  defaultValue: 'http://localhost:8080/api',
-);
+String get defaultBaseUrl {
+  const envUrl = String.fromEnvironment('API_BASE_URL');
+  if (envUrl.isNotEmpty) return envUrl;
+  if (kIsWeb) {
+    final host = Uri.base.host.isNotEmpty ? Uri.base.host : 'localhost';
+    final scheme = Uri.base.scheme.isNotEmpty ? Uri.base.scheme : 'http';
+    return '$scheme://$host:8080/api';
+  }
+  return 'http://localhost:8080/api';
+}
+
+String get defaultWsUrl {
+  const envWs = String.fromEnvironment('WS_URL');
+  if (envWs.isNotEmpty) return envWs;
+  if (kIsWeb) {
+    final host = Uri.base.host.isNotEmpty ? Uri.base.host : 'localhost';
+    final wsScheme = Uri.base.scheme == 'https' ? 'wss' : 'ws';
+    return '$wsScheme://$host:8080/ws';
+  }
+  return 'ws://localhost:8080/ws';
+}
 
 final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient();
@@ -21,7 +39,7 @@ class ApiClient {
 
   ApiClient() {
     _dio = Dio(BaseOptions(
-      baseUrl: baseUrl,
+      baseUrl: defaultBaseUrl,
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 30),
       headers: {'Content-Type': 'application/json'},
@@ -61,7 +79,7 @@ class ApiClient {
       final refreshToken = await _storage.read(key: 'refresh_token');
       if (refreshToken == null) return false;
 
-      final response = await Dio(BaseOptions(baseUrl: baseUrl)).post(
+      final response = await Dio(BaseOptions(baseUrl: defaultBaseUrl)).post(
         '/auth/refresh',
         data: {'refreshToken': refreshToken},
       );

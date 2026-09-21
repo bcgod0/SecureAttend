@@ -1,19 +1,6 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
@@ -31,16 +18,156 @@
 
   <title>secureattend</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- jsQR for web QR decoding -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+
+  <style>
+    #qr-scanner-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #000;
+      z-index: 99999;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    #qr-scanner-overlay.active { display: flex; }
+    #qr-video {
+      width: 100%;
+      max-width: 480px;
+      border-radius: 12px;
+      background: #111;
+    }
+    #qr-canvas { display: none; }
+    #qr-cancel-btn {
+      margin-top: 20px;
+      padding: 12px 32px;
+      background: rgba(255,255,255,0.15);
+      color: #fff;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-radius: 50px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    #qr-status {
+      color: rgba(255,255,255,0.8);
+      margin-top: 12px;
+      font-size: 14px;
+      font-family: sans-serif;
+    }
+  </style>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
+  <!-- QR scanner overlay (controlled by JS) -->
+  <div id="qr-scanner-overlay">
+    <video id="qr-video" autoplay muted playsinline></video>
+    <canvas id="qr-canvas"></canvas>
+    <p id="qr-status">Point camera at the QR code...</p>
+    <button id="qr-cancel-btn" onclick="window._qrCancelScan()">Cancel</button>
+  </div>
 
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
+  <script>
+    // ── Web QR Camera Scanner ──────────────────────────────────────────
+    (function () {
+      var _stream = null;
+      var _animFrame = null;
+      var _callback = null;
+
+      window._qrStartScan = function (callbackName) {
+        _callback = callbackName;
+        var overlay = document.getElementById('qr-scanner-overlay');
+        var video   = document.getElementById('qr-video');
+        var canvas  = document.getElementById('qr-canvas');
+        var status  = document.getElementById('qr-status');
+        status.textContent = 'Starting camera…';
+        overlay.classList.add('active');
+
+        navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+        }).then(function (stream) {
+          _stream = stream;
+          video.srcObject = stream;
+          video.play();
+          status.textContent = 'Point camera at the QR code…';
+          requestAnimationFrame(_tick);
+        }).catch(function (err) {
+          status.textContent = 'Camera error: ' + err.message;
+          // Fall back: tell Flutter camera failed so it can show text input
+          setTimeout(function () { window._qrCleanup(); if (_callback) window[_callback]('__CAMERA_ERROR__'); }, 1500);
+        });
+
+        function _tick() {
+          if (!_stream) return;
+          if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            canvas.width  = video.videoWidth;
+            canvas.height = video.videoHeight;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+            if (code && code.data) {
+              window._qrCleanup();
+              if (_callback) window[_callback](code.data);
+              return;
+            }
+          }
+          _animFrame = requestAnimationFrame(_tick);
+        }
+      };
+
+      window._qrCancelScan = function () {
+        window._qrCleanup();
+        if (_callback) window[_callback]('__CANCELLED__');
+      };
+
+      window._qrCleanup = function () {
+        if (_animFrame) { cancelAnimationFrame(_animFrame); _animFrame = null; }
+        if (_stream) { _stream.getTracks().forEach(function(t){ t.stop(); }); _stream = null; }
+        var video = document.getElementById('qr-video');
+        if (video) { video.srcObject = null; }
+        document.getElementById('qr-scanner-overlay').classList.remove('active');
+      };
+    })();
+
+    // ── Continuous Geolocation Stream ──────────────────────────────────
+    (function () {
+      var _watchId = null;
+      var _latestLat = null;
+      var _latestLng = null;
+      var _latestAcc = null;
+      var _geoError  = null;
+
+      window._geoStartStream = function () {
+        if (!navigator.geolocation) { _geoError = 'Geolocation not supported'; return; }
+        if (_watchId !== null) return; // already running
+        _watchId = navigator.geolocation.watchPosition(
+          function (pos) {
+            _latestLat = pos.coords.latitude;
+            _latestLng = pos.coords.longitude;
+            _latestAcc = pos.coords.accuracy;
+            _geoError  = null;
+          },
+          function (err) {
+            _geoError = err.message;
+          },
+          { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 }
+        );
+      };
+
+      window._geoGetLatest = function () {
+        if (_geoError) return JSON.stringify({ error: _geoError });
+        if (_latestLat === null) return JSON.stringify({ error: 'No fix yet' });
+        return JSON.stringify({ lat: _latestLat, lng: _latestLng, acc: _latestAcc });
+      };
+
+      window._geoStopStream = function () {
+        if (_watchId !== null) { navigator.geolocation.clearWatch(_watchId); _watchId = null; }
+      };
+    })();
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

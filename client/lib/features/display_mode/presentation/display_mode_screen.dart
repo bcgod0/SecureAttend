@@ -116,7 +116,7 @@ class _DisplayModeScreenState extends ConsumerState<DisplayModeScreen>
       final token = await storage.read(key: 'access_token');
       _stompClient = StompClient(
         config: StompConfig(
-          url: 'ws://localhost:8080/ws',
+          url: defaultWsUrl,
           onConnect: _onStompConnected,
           onDisconnect: (_) {
             if (mounted) {

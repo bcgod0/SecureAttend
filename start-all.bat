@@ -19,7 +19,7 @@ start "SecureAttend - Client" cmd /c "%~dp0start-client.bat"
 
 echo ========================================================
 echo All 3 services have been launched!
-echo - Backend:    http://localhost:8080
+echo - Backend:    http://localhost:8080 (LAN: http://192.168.70.209:8080)
 echo - ML Service: http://localhost:8000
-echo - Client:     Opening in Chrome...
+echo - Client:     http://localhost:3000 (Phone: http://192.168.70.209:3000)
 echo ========================================================
