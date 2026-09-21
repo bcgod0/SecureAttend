@@ -24,6 +24,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   String _selectedRole = 'STUDENT';
   String? _selectedBranch;
   String? _selectedSection;
+  int? _selectedSemester;
   bool _obscurePassword = true;
 
   static const List<String> _branches = [
@@ -41,6 +42,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   ];
 
   static const List<String> _sections = ['A', 'B', 'C', 'D'];
+  static const List<int> _semesters = [1, 2, 3, 4, 5, 6, 7, 8];
 
   @override
   void dispose() {
@@ -68,6 +70,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       section: isStudent ? _selectedSection : null,
       rollNo: isStudent ? _rollNoController.text.trim() : null,
       fatherName: _fatherNameController.text.trim(),
+      semester: isStudent ? _selectedSemester : null,
     );
 
     if (success && mounted) {
@@ -255,11 +258,28 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Student-specific fields: Section & Roll Number
+                    // Student-specific fields: Semester, Section & Roll Number
                     if (isStudent) ...[
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // Semester
+                          Expanded(
+                            flex: 1,
+                            child: DropdownButtonFormField<int>(
+                              value: _selectedSemester,
+                              decoration: const InputDecoration(
+                                labelText: 'Semester',
+                                prefixIcon: Icon(Icons.school_outlined),
+                              ),
+                              items: _semesters
+                                  .map((s) => DropdownMenuItem(value: s, child: Text('Sem $s')))
+                                  .toList(),
+                              onChanged: (val) => setState(() => _selectedSemester = val),
+                              validator: (v) => v == null ? 'Select semester' : null,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
                           // Section
                           Expanded(
                             flex: 1,
@@ -276,30 +296,27 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                               validator: (v) => v == null ? 'Select section' : null,
                             ),
                           ),
-                          const SizedBox(width: 16),
-                          // Roll Number
-                          Expanded(
-                            flex: 2,
-                            child: TextFormField(
-                              controller: _rollNoController,
-                              keyboardType: TextInputType.number,
-                              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                              decoration: const InputDecoration(
-                                labelText: 'University Roll No',
-                                hintText: 'e.g. 2100290100001',
-                                prefixIcon: Icon(Icons.badge_outlined),
-                              ),
-                              validator: (v) {
-                                final val = v?.trim() ?? '';
-                                if (val.isEmpty) return 'Roll number is required';
-                                if (!RegExp(r'^\d+$').hasMatch(val)) {
-                                  return 'Roll number must be numerical only';
-                                }
-                                return null;
-                              },
-                            ),
-                          ),
                         ],
+                      ),
+                      const SizedBox(height: 16),
+                      // Roll Number
+                      TextFormField(
+                        controller: _rollNoController,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        decoration: const InputDecoration(
+                          labelText: 'University Roll No',
+                          hintText: 'e.g. 2100290100001',
+                          prefixIcon: Icon(Icons.badge_outlined),
+                        ),
+                        validator: (v) {
+                          final val = v?.trim() ?? '';
+                          if (val.isEmpty) return 'Roll number is required';
+                          if (!RegExp(r'^\d+$').hasMatch(val)) {
+                            return 'Roll number must be numerical only';
+                          }
+                          return null;
+                        },
                       ),
                       const SizedBox(height: 16),
                     ],

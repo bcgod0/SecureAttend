@@ -1068,6 +1068,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
     String selectedRole = 'STUDENT';
     String? selectedBranch;
     String? selectedSection;
+    int? selectedSemester;
     final formKey = GlobalKey<FormState>();
 
     const branches = [
@@ -1236,11 +1237,27 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
                         const SizedBox(height: 14),
                       ],
 
-                      // Student-specific: Section & Roll Number
+                      // Student-specific: Semester, Section & Roll Number
                       if (isStudent) ...[
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            Expanded(
+                              flex: 1,
+                              child: DropdownButtonFormField<int>(
+                                initialValue: selectedSemester,
+                                decoration: const InputDecoration(
+                                  labelText: 'Semester',
+                                  prefixIcon: Icon(Icons.school_outlined),
+                                ),
+                                items: [1, 2, 3, 4, 5, 6, 7, 8]
+                                    .map((s) => DropdownMenuItem(value: s, child: Text('Sem $s')))
+                                    .toList(),
+                                onChanged: (val) => setDialogState(() => selectedSemester = val),
+                                validator: (v) => v == null ? 'Select' : null,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
                             Expanded(
                               flex: 1,
                               child: DropdownButtonFormField<String>(
@@ -1256,27 +1273,24 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
                                 validator: (v) => v == null ? 'Select' : null,
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              flex: 2,
-                              child: TextFormField(
-                                controller: rollNoController,
-                                keyboardType: TextInputType.number,
-                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                                decoration: const InputDecoration(
-                                  labelText: 'Roll No',
-                                  hintText: 'e.g. 2100290100001',
-                                  prefixIcon: Icon(Icons.badge_outlined),
-                                ),
-                                validator: (v) {
-                                  final val = v?.trim() ?? '';
-                                  if (val.isEmpty) return 'Required';
-                                  if (!RegExp(r'^\d+$').hasMatch(val)) return 'Digits only';
-                                  return null;
-                                },
-                              ),
-                            ),
                           ],
+                        ),
+                        const SizedBox(height: 14),
+                        TextFormField(
+                          controller: rollNoController,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          decoration: const InputDecoration(
+                            labelText: 'Roll No',
+                            hintText: 'e.g. 2100290100001',
+                            prefixIcon: Icon(Icons.badge_outlined),
+                          ),
+                          validator: (v) {
+                            final val = v?.trim() ?? '';
+                            if (val.isEmpty) return 'Required';
+                            if (!RegExp(r'^\d+$').hasMatch(val)) return 'Digits only';
+                            return null;
+                          },
                         ),
                         const SizedBox(height: 14),
                       ],
@@ -1320,6 +1334,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
                       section: isStudent ? selectedSection : null,
                       rollNo: isStudent ? rollNoController.text.trim() : null,
                       fatherName: !isAdmin ? fatherNameController.text.trim() : null,
+                      semester: isStudent ? selectedSemester : null,
                     );
                     _loadUsers();
                     if (mounted) {
@@ -2852,10 +2867,18 @@ class _CourseEnrollmentDialogState extends ConsumerState<_CourseEnrollmentDialog
     final branch = widget.course['branch'] as String?;
     final enrolledIds = _enrolledStudents.map((s) => s['id'] as String).toSet();
 
-    // All active student users
-    final allStudents = widget.allUsers
-        .where((u) => u['role'] == 'STUDENT' && u['status'] == 'ACTIVE')
-        .toList();
+    // Only active students belonging to the exact same branch as the course
+    final allStudents = widget.allUsers.where((u) {
+      final isStudent = u['role'] == 'STUDENT';
+      final isActive = u['status'] == 'ACTIVE';
+      final studentBranch = (u['branch'] as String?)?.trim().toLowerCase();
+      final targetBranch = branch?.trim().toLowerCase();
+      final hasBranchMatch = targetBranch != null &&
+          targetBranch.isNotEmpty &&
+          studentBranch != null &&
+          studentBranch == targetBranch;
+      return isStudent && isActive && hasBranchMatch;
+    }).toList();
 
     final q = _searchQuery.toLowerCase();
     final filteredAvailableStudents = allStudents.where((s) {
@@ -2952,13 +2975,13 @@ class _CourseEnrollmentDialogState extends ConsumerState<_CourseEnrollmentDialog
                   ],
                 ),
               ),
-              Tab(
+              const Tab(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.person_add_outlined, size: 16),
-                    const SizedBox(width: 6),
-                    const Text('Enroll New'),
+                    Icon(Icons.person_add_outlined, size: 16),
+                    SizedBox(width: 6),
+                    Text('Enroll New'),
                   ],
                 ),
               ),
@@ -2976,7 +2999,7 @@ class _CourseEnrollmentDialogState extends ConsumerState<_CourseEnrollmentDialog
             _buildEnrolledTab(),
 
             // ── Tab 2: Enroll New Students ────────────────────────────────
-            _buildEnrollNewTab(filteredAvailableStudents, enrolledIds),
+            _buildEnrollNewTab(filteredAvailableStudents, enrolledIds, branch),
           ],
         ),
       ),
@@ -3087,17 +3110,66 @@ class _CourseEnrollmentDialogState extends ConsumerState<_CourseEnrollmentDialog
     );
   }
 
-  Widget _buildEnrollNewTab(List<Map<String, dynamic>> students, Set<String> enrolledIds) {
+  Widget _buildEnrollNewTab(List<Map<String, dynamic>> students, Set<String> enrolledIds, String? courseBranch) {
+    if (courseBranch == null || courseBranch.trim().isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.warning_amber_rounded, size: 48, color: AppTheme.warningColor),
+              SizedBox(height: 12),
+              Text(
+                'No Branch Assigned to Course',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Students and courses must belong to the same branch to be enrolled. Please edit this course and assign a branch (e.g. CSE, IT, MCA) first.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey, fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     final unenrolledStudents = students.where((s) => !enrolledIds.contains(s['id'])).toList();
 
     return Column(
       children: [
         const SizedBox(height: 8),
+
+        // Branch eligibility info banner
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppTheme.primaryColor.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.2)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.account_tree_outlined, size: 15, color: AppTheme.primaryColor),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Eligible branch: $courseBranch (only $courseBranch students can be enrolled)',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.primaryColor),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+
         // Search Input
         TextField(
           controller: _searchController,
           decoration: InputDecoration(
-            hintText: 'Search by name, email, roll number...',
+            hintText: 'Search $courseBranch students by name, email, roll...',
             prefixIcon: const Icon(Icons.search, size: 18),
             suffixIcon: _searchQuery.isNotEmpty
                 ? IconButton(
@@ -3145,8 +3217,31 @@ class _CourseEnrollmentDialogState extends ConsumerState<_CourseEnrollmentDialog
         // Student List
         Expanded(
           child: students.isEmpty
-              ? const Center(
-                  child: Text('No students match the search filter.', style: TextStyle(color: Colors.grey)),
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.people_outline, size: 48, color: Colors.grey.shade400),
+                        const SizedBox(height: 12),
+                        Text(
+                          _searchQuery.isEmpty
+                              ? 'No active students found in branch "$courseBranch"'
+                              : 'No "$courseBranch" students match "$_searchQuery"',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          _searchQuery.isEmpty
+                              ? 'Only students belonging to branch "$courseBranch" can be enrolled in this course.'
+                              : 'Try adjusting your search query.',
+                          style: const TextStyle(color: Colors.grey, fontSize: 12),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
                 )
               : ListView.separated(
                   itemCount: students.length,

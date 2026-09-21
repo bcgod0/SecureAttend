@@ -98,13 +98,23 @@ class SessionController(
             throw ValidationException("courseId", "Cannot start session for an inactive course")
         }
 
-        // Only assigned faculty (or admin) can create attendance session
-        if (course.facultyId != null && course.facultyId != facultyId) {
-            val user = userRepository.findById(facultyId).orElse(null)
-            if (user?.role != UserRole.ADMIN) {
-                val assignedFaculty = userRepository.findById(course.facultyId!!).orElse(null)
-                val facultyName = assignedFaculty?.fullName ?: "another faculty member"
-                throw ForbiddenException("Only the assigned faculty ($facultyName) can conduct attendance for this course")
+        val user = userRepository.findById(facultyId)
+            .orElseThrow { ResourceNotFoundException("User", facultyId.toString()) }
+
+        // Only assigned faculty from the same branch (or admin) can create attendance session
+        if (user.role == UserRole.FACULTY) {
+            if (course.facultyId != facultyId) {
+                val assignedFaculty = course.facultyId?.let { userRepository.findById(it).orElse(null) }
+                val facultyMsg = if (assignedFaculty != null) "assigned to ${assignedFaculty.fullName}" else "not assigned to any faculty"
+                throw ForbiddenException("Only the assigned faculty can conduct attendance for this course (course is $facultyMsg)")
+            }
+
+            val courseBranch = course.branch?.trim()
+            val facultyBranch = user.branch?.trim()
+            if (courseBranch.isNullOrBlank() || facultyBranch.isNullOrBlank() || !courseBranch.equals(facultyBranch, ignoreCase = true)) {
+                throw ForbiddenException(
+                    "You cannot conduct attendance for this course. Faculty branch '${user.branch}' does not match course branch '${course.branch}'. Faculty and course must belong to the same branch."
+                )
             }
         }
 

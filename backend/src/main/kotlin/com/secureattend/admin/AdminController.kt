@@ -297,14 +297,31 @@ class AdminController(
         @PathVariable courseId: UUID,
         @RequestBody request: EnrollStudentsRequest
     ): EnrollStudentsResponse {
-        if (!courseRepository.existsById(courseId)) {
-            throw ResourceNotFoundException("Course", courseId.toString())
+        val course = courseRepository.findById(courseId)
+            .orElseThrow { ResourceNotFoundException("Course", courseId.toString()) }
+
+        val courseBranch = course.branch
+        if (courseBranch.isNullOrBlank()) {
+            throw com.secureattend.common.exception.ValidationException(
+                "branch",
+                "Cannot enroll students: Course '${course.code}' has no branch assigned."
+            )
         }
 
         var enrolled = 0
         var alreadyEnrolled = 0
 
         request.studentIds.forEach { studentId ->
+            val student = userRepository.findById(studentId).orElse(null) ?: return@forEach
+
+            // Enforce that student and course must have the same branch
+            if (student.branch.isNullOrBlank() || !student.branch.equals(courseBranch, ignoreCase = true)) {
+                throw com.secureattend.common.exception.ValidationException(
+                    "branch",
+                    "Student '${student.fullName}' (${student.branch ?: "No Branch"}) cannot be enrolled in course '${course.code}' ($courseBranch). Student and course must belong to the same branch."
+                )
+            }
+
             if (courseEnrollmentRepository.existsByIdStudentIdAndIdCourseId(studentId, courseId)) {
                 alreadyEnrolled++
             } else {
@@ -332,8 +349,9 @@ class AdminController(
 
     @GetMapping("/courses/{courseId}/students")
     fun listCourseStudents(@PathVariable courseId: UUID): List<EnrolledStudentResponse> {
-        val course = courseRepository.findById(courseId)
-            .orElseThrow { ResourceNotFoundException("Course", courseId.toString()) }
+        if (!courseRepository.existsById(courseId)) {
+            throw ResourceNotFoundException("Course", courseId.toString())
+        }
 
         val enrollments = courseEnrollmentRepository.findByIdCourseId(courseId)
         val studentIds = enrollments.map { it.id.studentId }

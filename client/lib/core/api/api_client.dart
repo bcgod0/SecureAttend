@@ -86,6 +86,7 @@ class ApiClient {
     String? section,
     String? rollNo,
     String? fatherName,
+    int? semester,
   }) async {
     final response = await _dio.post('/auth/register', data: {
       'email': email,
@@ -97,6 +98,7 @@ class ApiClient {
       if (section != null) 'section': section,
       if (rollNo != null) 'rollNo': rollNo,
       if (fatherName != null) 'fatherName': fatherName,
+      if (semester != null) 'semester': semester,
     });
     return response.data;
   }
@@ -120,6 +122,11 @@ class ApiClient {
   Future<void> logout() async {
     await _storage.delete(key: 'access_token');
     await _storage.delete(key: 'refresh_token');
+  }
+
+  Future<Map<String, dynamic>> getMe() async {
+    final response = await _dio.get('/auth/me');
+    return response.data;
   }
 
   // ---- Enrollment ----

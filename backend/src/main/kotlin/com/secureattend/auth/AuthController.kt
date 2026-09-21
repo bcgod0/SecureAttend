@@ -15,6 +15,7 @@ import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
+import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.web.bind.annotation.*
 import java.time.Instant
@@ -31,7 +32,8 @@ data class RegisterRequest(
     val branch: String? = null,
     val section: String? = null,
     val rollNo: String? = null,
-    val fatherName: String? = null
+    val fatherName: String? = null,
+    val semester: Int? = null
 )
 
 data class LoginRequest(
@@ -54,6 +56,7 @@ data class UserResponse(
     val section: String? = null,
     val rollNo: String? = null,
     val fatherName: String? = null,
+    val semester: Int? = null,
     val createdAt: Instant
 )
 
@@ -130,6 +133,9 @@ class AuthController(
             if (!request.rollNo.trim().matches(Regex("^[0-9]+$"))) {
                 throw com.secureattend.common.exception.ValidationException("rollNo", "Roll number must be numerical only")
             }
+            if (request.semester == null || request.semester !in 1..8) {
+                throw com.secureattend.common.exception.ValidationException("semester", "Semester must be between 1 and 8 for students")
+            }
         }
 
         val user = userRepository.save(
@@ -142,7 +148,8 @@ class AuthController(
                 branch = request.branch?.trim(),
                 section = request.section?.trim(),
                 rollNo = request.rollNo?.trim(),
-                fatherName = request.fatherName?.trim()
+                fatherName = request.fatherName?.trim(),
+                semester = if (request.role == UserRole.STUDENT) request.semester else null
             )
         )
 
@@ -206,6 +213,22 @@ class AuthController(
         )
     }
 
+    @GetMapping("/me")
+    fun getCurrentUser(): UserResponse {
+        val authentication = SecurityContextHolder.getContext().authentication
+            ?: throw InvalidCredentialsException()
+        val principal = authentication.principal as? String
+            ?: throw InvalidCredentialsException()
+        val userId = try {
+            UUID.fromString(principal)
+        } catch (e: Exception) {
+            throw InvalidCredentialsException()
+        }
+        val user = userRepository.findById(userId)
+            .orElseThrow { ResourceNotFoundException("User", userId.toString()) }
+        return user.toResponse()
+    }
+
     private fun User.toResponse() = UserResponse(
         id = id!!,
         email = email,
@@ -217,6 +240,7 @@ class AuthController(
         section = section,
         rollNo = rollNo,
         fatherName = fatherName,
+        semester = semester,
         createdAt = createdAt
     )
 }

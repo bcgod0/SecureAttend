@@ -9,6 +9,7 @@ class AuthState {
   final String? email;
   final String? fullName;
   final String? role;
+  final String? branch;
   final bool isLoading;
   final String? error;
 
@@ -18,6 +19,7 @@ class AuthState {
     this.email,
     this.fullName,
     this.role,
+    this.branch,
     this.isLoading = false,
     this.error,
   });
@@ -28,6 +30,7 @@ class AuthState {
     String? email,
     String? fullName,
     String? role,
+    String? branch,
     bool? isLoading,
     String? error,
   }) {
@@ -37,6 +40,7 @@ class AuthState {
       email: email ?? this.email,
       fullName: fullName ?? this.fullName,
       role: role ?? this.role,
+      branch: branch ?? this.branch,
       isLoading: isLoading ?? this.isLoading,
       error: error,
     );
@@ -57,6 +61,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final userId = await _storage.read(key: 'user_id');
     final email = await _storage.read(key: 'user_email');
     final fullName = await _storage.read(key: 'user_name');
+    final branch = await _storage.read(key: 'user_branch');
 
     if (token != null && role != null) {
       state = state.copyWith(
@@ -65,7 +70,22 @@ class AuthNotifier extends StateNotifier<AuthState> {
         email: email,
         fullName: fullName,
         role: role,
+        branch: branch,
       );
+
+      // Refresh profile in background
+      try {
+        final me = await _apiClient.getMe();
+        final currentBranch = me['branch'] as String?;
+        if (currentBranch != null) {
+          await _storage.write(key: 'user_branch', value: currentBranch);
+        }
+        state = state.copyWith(
+          fullName: me['fullName'] as String?,
+          role: me['role'] as String?,
+          branch: currentBranch,
+        );
+      } catch (_) {}
     }
   }
 
@@ -79,6 +99,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _storage.write(key: 'user_email', value: user['email']);
       await _storage.write(key: 'user_name', value: user['fullName']);
       await _storage.write(key: 'user_role', value: user['role']);
+      if (user['branch'] != null) {
+        await _storage.write(key: 'user_branch', value: user['branch']);
+      }
 
       state = state.copyWith(
         isLoggedIn: true,
@@ -86,6 +109,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         email: user['email'],
         fullName: user['fullName'],
         role: user['role'],
+        branch: user['branch'],
         isLoading: false,
       );
       return true;
@@ -116,6 +140,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     String? section,
     String? rollNo,
     String? fatherName,
+    int? semester,
   }) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
@@ -129,6 +154,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         section: section,
         rollNo: rollNo,
         fatherName: fatherName,
+        semester: semester,
       );
       state = state.copyWith(isLoading: false);
       return true;
