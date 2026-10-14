@@ -1,5 +1,5 @@
-SecureAttend Public URLs - 09/21/2026 18:55:21
+SecureAttend Public URLs - 09/28/2026 15:17:29
 =====================================
-App URL (Share this!): https://detective-rugby-bomb-annotation.trycloudflare.com
-Backend API URL      : https://exhaust-helicopter-strategy-rest.trycloudflare.com/api
-WebSocket URL        : wss://exhaust-helicopter-strategy-rest.trycloudflare.com/ws
+App URL (Share this!): https://hood-thinking-mississippi-michel.trycloudflare.com
+Backend API URL      : https://carries-geology-boring-drops.trycloudflare.com/api
+WebSocket URL        : wss://carries-geology-boring-drops.trycloudflare.com/ws

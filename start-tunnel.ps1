@@ -141,12 +141,37 @@ Write-Host "[3/5] Flutter web build complete." -ForegroundColor Green
 # --- Step 4: Serve Flutter web build on port 3000 via Python ---
 Write-Host ""
 Write-Host "[4/5] Starting local web server (port 3000)..." -ForegroundColor Yellow
+
+$serveLogFile = Join-Path $projectRoot "serve-python.log"
+if (Test-Path $serveLogFile) { Remove-Item $serveLogFile -Force }
+
+$serveArgs = "-m http.server 3000 --bind 127.0.0.1 --directory `"$webBuildDir`""
 $serveProcess = Start-Process -FilePath "python" `
-    -ArgumentList "-m", "http.server", "3000", "--directory", $webBuildDir `
+    -ArgumentList $serveArgs `
+    -RedirectStandardError $serveLogFile `
     -PassThru -NoNewWindow
 
-Start-Sleep -Seconds 2
-Write-Host "[4/5] Web server started." -ForegroundColor Green
+# Wait until port 3000 is actually listening (up to 15 seconds)
+$serverReady = $false
+for ($i = 0; $i -lt 15; $i++) {
+    Start-Sleep -Seconds 1
+    $conn = netstat -ano 2>$null | Select-String ":3000"
+    if ($conn) { $serverReady = $true; break }
+}
+
+if (-not $serverReady) {
+    Write-Host "[ERROR] Python web server failed to start on port 3000." -ForegroundColor Red
+    if (Test-Path $serveLogFile) {
+        Write-Host "--- Python error log ---" -ForegroundColor Yellow
+        Get-Content $serveLogFile | Write-Host
+    }
+    $backendTunnel | Stop-Process -Force -ErrorAction SilentlyContinue
+    $serveProcess  | Stop-Process -Force -ErrorAction SilentlyContinue
+    Pause
+    exit 1
+}
+
+Write-Host "[4/5] Web server started on http://127.0.0.1:3000" -ForegroundColor Green
 
 # --- Step 5: Start frontend tunnel ---
 Write-Host ""

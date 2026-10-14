@@ -1,44 +1,50 @@
-2026-09-21T13:23:37Z INF Thank you for trying Cloudflare Tunnel. Doing so, without a Cloudflare account, is a quick way to experiment and try it out. However, be aware that these account-less Tunnels have no uptime guarantee, are subject to the Cloudflare Online Services Terms of Use (https://www.cloudflare.com/website-terms/), and Cloudflare reserves the right to investigate your use of Tunnels for violations of such terms. If you intend to use Tunnels in production you should use a pre-created named tunnel by following: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps
-2026-09-21T13:23:37Z INF Requesting new quick Tunnel on trycloudflare.com...
-2026-09-21T13:23:43Z INF +--------------------------------------------------------------------------------------------+
-2026-09-21T13:23:43Z INF |  Your quick Tunnel has been created! Visit it at (it may take some time to be reachable):  |
-2026-09-21T13:23:43Z INF |  https://exhaust-helicopter-strategy-rest.trycloudflare.com                                |
-2026-09-21T13:23:43Z INF +--------------------------------------------------------------------------------------------+
-2026-09-21T13:23:43Z INF Cannot determine default configuration path. No file [config.yml config.yaml] in [~/.cloudflared ~/.cloudflare-warp ~/cloudflare-warp]
-2026-09-21T13:23:43Z INF Version 2026.9.1 (Checksum 2837888cc0f5d58f15b6dc478376de90b4d3ba5241c7947455d1e0a0df429712)
-2026-09-21T13:23:43Z INF GOOS: windows, GOVersion: go1.26.8, GoArch: amd64
-2026-09-21T13:23:43Z INF Settings: map[ha-connections:1 no-autoupdate:true protocol:quic url:http://localhost:8080]
-2026-09-21T13:23:43Z INF cloudflared will not automatically update on Windows systems.
-2026-09-21T13:23:43Z INF Generated Connector ID: ecd3008e-77bb-4508-bd12-abffcd00ad8f
-2026-09-21T13:23:43Z INF Initial protocol quic
-2026-09-21T13:23:43Z INF ICMP proxy will use 192.168.70.209 as source for IPv4
-2026-09-21T13:23:43Z INF ICMP proxy will use fe80::4c38:2ffc:fe2a:6b0e in zone Wi-Fi as source for IPv6
-2026-09-21T13:23:43Z INF cloudflared does not support loading the system root certificate pool on Windows. Please use --origin-ca-pool <PATH> to specify the path to the certificate pool
-2026-09-21T13:23:43Z INF ICMP proxy will use 192.168.70.209 as source for IPv4
-2026-09-21T13:23:43Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=198.41.192.47
-2026-09-21T13:23:43Z INF ICMP proxy will use fe80::4c38:2ffc:fe2a:6b0e in zone Wi-Fi as source for IPv6
-2026-09-21T13:23:43Z INF Starting metrics server on 127.0.0.1:20243/metrics
-2026-09-21T13:23:43Z INF +-------------------------------------------------------------------------------------+
-2026-09-21T13:23:43Z INF |                               CONNECTIVITY PRE-CHECKS                               |
-2026-09-21T13:23:43Z INF +-------------------------------------------------------------------------------------+
-2026-09-21T13:23:43Z INF |  COMPONENT         TARGET                     STATUS  DETAILS                       |
-2026-09-21T13:23:43Z INF |  DNS Resolution    region1.v2.argotunnel.com  PASS    DNS Resolved successfully     |
-2026-09-21T13:23:43Z INF |  DNS Resolution    region2.v2.argotunnel.com  PASS    DNS Resolved successfully     |
-2026-09-21T13:23:43Z INF |  UDP Connectivity  region1.v2.argotunnel.com  PASS    QUIC connection successful    |
-2026-09-21T13:23:43Z INF |  UDP Connectivity  region2.v2.argotunnel.com  PASS    QUIC connection successful    |
-2026-09-21T13:23:43Z INF |  TCP Connectivity  region1.v2.argotunnel.com  PASS    HTTP/2 connection successful  |
-2026-09-21T13:23:43Z INF |  TCP Connectivity  region2.v2.argotunnel.com  PASS    HTTP/2 connection successful  |
-2026-09-21T13:23:43Z INF |  Cloudflare API    api.cloudflare.com:443     PASS    API is reachable              |
-2026-09-21T13:23:43Z INF |                                                                                     |
-2026-09-21T13:23:43Z INF |  SUMMARY: Environment is healthy. cloudflared will use 'quic' as primary protocol.  |
-2026-09-21T13:23:43Z INF +-------------------------------------------------------------------------------------+
-2026-09-21T13:23:43Z INF precheck component="DNS Resolution" details="DNS Resolved successfully" run_id=1d1aaefc-4934-49a1-8c2b-3f1a7b8c631e status=pass target=region1.v2.argotunnel.com
-2026-09-21T13:23:43Z INF precheck component="DNS Resolution" details="DNS Resolved successfully" run_id=1d1aaefc-4934-49a1-8c2b-3f1a7b8c631e status=pass target=region2.v2.argotunnel.com
-2026-09-21T13:23:43Z INF precheck component="UDP Connectivity" details="QUIC connection successful" run_id=1d1aaefc-4934-49a1-8c2b-3f1a7b8c631e status=pass target=region1.v2.argotunnel.com
-2026-09-21T13:23:43Z INF precheck component="UDP Connectivity" details="QUIC connection successful" run_id=1d1aaefc-4934-49a1-8c2b-3f1a7b8c631e status=pass target=region2.v2.argotunnel.com
-2026-09-21T13:23:43Z INF precheck component="TCP Connectivity" details="HTTP/2 connection successful" run_id=1d1aaefc-4934-49a1-8c2b-3f1a7b8c631e status=pass target=region1.v2.argotunnel.com
-2026-09-21T13:23:43Z INF precheck component="TCP Connectivity" details="HTTP/2 connection successful" run_id=1d1aaefc-4934-49a1-8c2b-3f1a7b8c631e status=pass target=region2.v2.argotunnel.com
-2026-09-21T13:23:43Z INF precheck component="Cloudflare API" details="API is reachable" run_id=1d1aaefc-4934-49a1-8c2b-3f1a7b8c631e status=pass target=api.cloudflare.com:443
-2026-09-21T13:23:43Z INF precheck complete hard_fail=false run_id=1d1aaefc-4934-49a1-8c2b-3f1a7b8c631e suggested_protocol=quic
-2026-09-21T13:23:44Z INF Registered tunnel connection connIndex=0 connection=e8ad825b-a12f-4f18-ad8b-93010e24889d event=0 ip=198.41.192.47 location=del01 protocol=quic
-2026-09-21T14:06:02Z INF Initiating graceful shutdown due to signal interrupt ...
+2026-09-28T09:45:55Z INF Thank you for trying Cloudflare Tunnel. Doing so, without a Cloudflare account, is a quick way to experiment and try it out. However, be aware that these account-less Tunnels have no uptime guarantee, are subject to the Cloudflare Online Services Terms of Use (https://www.cloudflare.com/website-terms/), and Cloudflare reserves the right to investigate your use of Tunnels for violations of such terms. If you intend to use Tunnels in production you should use a pre-created named tunnel by following: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps
+2026-09-28T09:45:55Z INF Requesting new quick Tunnel on trycloudflare.com...
+2026-09-28T09:46:00Z INF +--------------------------------------------------------------------------------------------+
+2026-09-28T09:46:00Z INF |  Your quick Tunnel has been created! Visit it at (it may take some time to be reachable):  |
+2026-09-28T09:46:00Z INF |  https://carries-geology-boring-drops.trycloudflare.com                                    |
+2026-09-28T09:46:00Z INF +--------------------------------------------------------------------------------------------+
+2026-09-28T09:46:00Z INF Cannot determine default configuration path. No file [config.yml config.yaml] in [~/.cloudflared ~/.cloudflare-warp ~/cloudflare-warp]
+2026-09-28T09:46:00Z INF Version 2026.9.1 (Checksum 2837888cc0f5d58f15b6dc478376de90b4d3ba5241c7947455d1e0a0df429712)
+2026-09-28T09:46:00Z INF GOOS: windows, GOVersion: go1.26.8, GoArch: amd64
+2026-09-28T09:46:00Z INF Settings: map[ha-connections:1 no-autoupdate:true protocol:quic url:http://localhost:8080]
+2026-09-28T09:46:00Z INF cloudflared will not automatically update on Windows systems.
+2026-09-28T09:46:00Z INF Generated Connector ID: b6c8b962-b4e3-4b1c-bc20-0e9f719ae0fa
+2026-09-28T09:46:00Z INF Initial protocol quic
+2026-09-28T09:46:00Z INF ICMP proxy will use 10.21.192.255 as source for IPv4
+2026-09-28T09:46:00Z INF ICMP proxy will use fe80::8bf:ef4:752e:6664 in zone Wi-Fi as source for IPv6
+2026-09-28T09:46:00Z INF cloudflared does not support loading the system root certificate pool on Windows. Please use --origin-ca-pool <PATH> to specify the path to the certificate pool
+2026-09-28T09:46:00Z INF ICMP proxy will use 10.21.192.255 as source for IPv4
+2026-09-28T09:46:00Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=198.41.200.73
+2026-09-28T09:46:00Z INF ICMP proxy will use fe80::8bf:ef4:752e:6664 in zone Wi-Fi as source for IPv6
+2026-09-28T09:46:00Z INF Starting metrics server on 127.0.0.1:20241/metrics
+2026-09-28T09:46:01Z INF +-------------------------------------------------------------------------------------+
+2026-09-28T09:46:01Z INF |                               CONNECTIVITY PRE-CHECKS                               |
+2026-09-28T09:46:01Z INF +-------------------------------------------------------------------------------------+
+2026-09-28T09:46:01Z INF |  COMPONENT         TARGET                     STATUS  DETAILS                       |
+2026-09-28T09:46:01Z INF |  DNS Resolution    region1.v2.argotunnel.com  PASS    DNS Resolved successfully     |
+2026-09-28T09:46:01Z INF |  DNS Resolution    region2.v2.argotunnel.com  PASS    DNS Resolved successfully     |
+2026-09-28T09:46:01Z INF |  UDP Connectivity  region1.v2.argotunnel.com  PASS    QUIC connection successful    |
+2026-09-28T09:46:01Z INF |  UDP Connectivity  region2.v2.argotunnel.com  PASS    QUIC connection successful    |
+2026-09-28T09:46:01Z INF |  TCP Connectivity  region1.v2.argotunnel.com  PASS    HTTP/2 connection successful  |
+2026-09-28T09:46:01Z INF |  TCP Connectivity  region2.v2.argotunnel.com  PASS    HTTP/2 connection successful  |
+2026-09-28T09:46:01Z INF |  Cloudflare API    api.cloudflare.com:443     PASS    API is reachable              |
+2026-09-28T09:46:01Z INF |                                                                                     |
+2026-09-28T09:46:01Z INF |  SUMMARY: Environment is healthy. cloudflared will use 'quic' as primary protocol.  |
+2026-09-28T09:46:01Z INF +-------------------------------------------------------------------------------------+
+2026-09-28T09:46:01Z INF precheck component="DNS Resolution" details="DNS Resolved successfully" run_id=fc44f698-af61-4672-9fa8-9d5f69e7ee72 status=pass target=region1.v2.argotunnel.com
+2026-09-28T09:46:01Z INF precheck component="DNS Resolution" details="DNS Resolved successfully" run_id=fc44f698-af61-4672-9fa8-9d5f69e7ee72 status=pass target=region2.v2.argotunnel.com
+2026-09-28T09:46:01Z INF precheck component="UDP Connectivity" details="QUIC connection successful" run_id=fc44f698-af61-4672-9fa8-9d5f69e7ee72 status=pass target=region1.v2.argotunnel.com
+2026-09-28T09:46:01Z INF precheck component="UDP Connectivity" details="QUIC connection successful" run_id=fc44f698-af61-4672-9fa8-9d5f69e7ee72 status=pass target=region2.v2.argotunnel.com
+2026-09-28T09:46:01Z INF precheck component="TCP Connectivity" details="HTTP/2 connection successful" run_id=fc44f698-af61-4672-9fa8-9d5f69e7ee72 status=pass target=region1.v2.argotunnel.com
+2026-09-28T09:46:01Z INF precheck component="TCP Connectivity" details="HTTP/2 connection successful" run_id=fc44f698-af61-4672-9fa8-9d5f69e7ee72 status=pass target=region2.v2.argotunnel.com
+2026-09-28T09:46:01Z INF precheck component="Cloudflare API" details="API is reachable" run_id=fc44f698-af61-4672-9fa8-9d5f69e7ee72 status=pass target=api.cloudflare.com:443
+2026-09-28T09:46:01Z INF precheck complete hard_fail=false run_id=fc44f698-af61-4672-9fa8-9d5f69e7ee72 suggested_protocol=quic
+2026-09-28T09:46:01Z INF Registered tunnel connection connIndex=0 connection=c7716ad0-540e-4489-bc80-26370a78a69f event=0 ip=198.41.200.73 location=del03 protocol=quic
+2026-09-28T09:53:29Z ERR Failed to refresh DNS local resolver error="lookup region1.v2.argotunnel.com: i/o timeout"
+2026-09-28T09:53:33Z ERR Serve tunnel error error="accept stream listener error: failed to accept QUIC stream: timeout: no recent network activity" connIndex=0 event=0 ip=198.41.200.73
+2026-09-28T09:53:33Z INF Retrying connection in up to 1s connIndex=0 event=0 ip=198.41.200.73
+2026-09-28T09:53:34Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveID(65074) CurveP256] connIndex=0 event=0 ip=198.41.192.107
+2026-09-28T09:59:48Z INF Registered tunnel connection connIndex=0 connection=462ddd7a-9fcd-4806-b492-6e0320664991 event=0 ip=198.41.192.107 location=del01 protocol=quic
+2026-09-28T09:59:53Z ERR Failed to refresh DNS local resolver error="lookup region1.v2.argotunnel.com: i/o timeout"
+2026-09-28T10:00:46Z INF Initiating graceful shutdown due to signal interrupt ...
